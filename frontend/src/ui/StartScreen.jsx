@@ -51,7 +51,6 @@ const styles = {
     padding: 16,
     background: 'rgba(255, 244, 230, 0.55)',
     backdropFilter: 'blur(4px)',
-    fontFamily: 'system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif',
     color: '#4a3b35',
   },
   panel: {

@@ -13,24 +13,34 @@ import { createPlayerFigure } from './playerFigure.js'
 const MAX_FRAME_SECONDS = 0.1
 
 /**
- * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向與調整俯仰角。
+ * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動。
  *
- * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變。
+ * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變,按 F 也沒有效果。
+ *
+ * 介面層透過兩個 callback 得知遊戲的狀態:
+ * - `onStatusChange({ canInteract, progress })`:可互動或進度有變時呼叫。每一局的第一幀也會呼叫一次。
+ * - `onInteract(result)`:每按一次 F,遊戲核心處理完之後呼叫。result 是遊戲核心 `interact()` 的回傳值。
+ *
  * 父元件透過 ref 可以拿到 `{ lockPointer() }`,用它把游標鎖在畫布上。
  * 父元件必須在使用者的點擊或按鍵事件裡同步呼叫 `lockPointer()`,否則瀏覽器會拒絕鎖定。
  *
  * 換一局遊戲(`game` 換成另一個物件)時,整個場景會釋放後重建。
  * 卸載時釋放 renderer、geometry 與 material,畫布也會從頁面上移除。
  */
-const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
+const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange, onInteract }, ref) {
   const containerRef = useRef(null)
   const controlsRef = useRef(null)
-  // 動畫迴圈只在 game 換掉時重建,所以迴圈裡要透過 ref 讀到最新的 active
+  // 動畫迴圈只在 game 換掉時重建,所以迴圈裡要透過 ref 讀到最新的 active 與 callback
   const activeRef = useRef(active)
+  const callbacksRef = useRef({ onStatusChange, onInteract })
 
   useEffect(() => {
     activeRef.current = active
   }, [active])
+
+  useEffect(() => {
+    callbacksRef.current = { onStatusChange, onInteract }
+  }, [onStatusChange, onInteract])
 
   useImperativeHandle(ref, () => ({
     lockPointer() {
@@ -67,13 +77,23 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
     observer.observe(container)
 
     let lastTime = null
+    let lastStatus = null
     renderer.setAnimationLoop((time) => {
       const dt = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, MAX_FRAME_SECONDS)
       lastTime = time
 
       const before = game.player
-      const { pitch, ...input } = controls.read()
-      if (activeRef.current) game.step({ ...input, dt })
+      const { pitch, interactions, ...input } = controls.read()
+      if (activeRef.current) {
+        game.step({ ...input, dt })
+        // 互動在移動之後處理,判斷的是主角這一幀跑完之後所在的格子
+        for (let i = 0; i < interactions; i += 1) callbacksRef.current.onInteract?.(game.interact())
+      }
+      const status = { canInteract: game.canInteract, progress: game.progress }
+      if (lastStatus?.canInteract !== status.canInteract || lastStatus?.progress !== status.progress) {
+        lastStatus = status
+        callbacksRef.current.onStatusChange?.(status)
+      }
       const player = game.player
 
       const position = toWorld(game.maze, player)
