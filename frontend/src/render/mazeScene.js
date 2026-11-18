@@ -1,4 +1,4 @@
-// 把一局遊戲的迷宮畫成 Three.js 場景:草地地板、樹籬牆、白天光線,以及外牆上的門。
+// 把一局遊戲的迷宮畫成 Three.js 場景:草地地板、樹籬牆、白天光線,以及外牆上鎖著或打開的門。
 // 這裡只把遊戲核心給的狀態換算成 3D 物件,不決定任何規則;哪裡有牆、門在哪裡都由核心決定。
 import {
   BoxGeometry,
@@ -41,7 +41,7 @@ const OFFSETS = {
  * 從一局遊戲建立迷宮場景。
  *
  * 迷宮的正中央在世界座標的原點,遊戲核心的座標用 `toWorld` 換算。
- * 場景只反映建立當下的狀態,之後狀態改變不會自動更新。
+ * 場景只反映建立當下的狀態,之後狀態改變不會自動更新。門在建立之後才打開時,要由呼叫端呼叫 `openDoor()`。
  * 用完必須呼叫 `dispose()` 釋放 geometry 與 material;renderer 由呼叫端自己釋放。
  */
 export function createMazeScene(game) {
@@ -82,6 +82,15 @@ export function createMazeScene(game) {
   doorPanel.position.set(doorCenter.x, DOOR_HEIGHT / 2, doorCenter.z)
   doorPanel.rotation.y = rotationOf(door.side)
   scene.add(doorPanel)
+  // 門打開後,門板、鎖與門上方那一截樹籬都拿掉,外牆上只留一個缺口:
+  // - 鏡頭與狗只避開遊戲核心的牆,轉開後留在門口的門板會被它們穿過去。
+  // - 鏡頭會穿過打開的門。往下看的時候,視線會被門上方那一截樹籬整個擋住。
+  const openDoor = () => {
+    doorPanel.visible = false
+    // 門上方那一截樹籬是最後一個實例,少畫一個就是把它拿掉
+    hedges.count = walls.length
+  }
+  if (game.doorOpen) openDoor()
 
   // 背光的牆面只照得到天光,天光要夠亮,從任何方向看迷宮都是白天
   const skyLight = new HemisphereLight('#ffffff', GRASS_COLOR, 3)
@@ -104,6 +113,7 @@ export function createMazeScene(game) {
 
   return {
     scene,
+    openDoor,
     dispose() {
       for (const resource of resources) resource.dispose()
     },
