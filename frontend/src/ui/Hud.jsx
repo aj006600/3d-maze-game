@@ -1,5 +1,6 @@
 // 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、可互動時的「按 F」,以及按錯時的「不是這個」。
 // 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
+import Key from './Key.jsx'
 
 // inline style 寫不了 @keyframes,動畫另外放在這段 CSS 裡
 const KEYFRAMES = `
@@ -51,7 +52,7 @@ export default function Hud({ phrase, progress, canInteract, wrongCount }) {
         )}
         {canInteract && (
           <div style={styles.interact}>
-            按 <kbd style={styles.key}>F</kbd>
+            按<Key>F</Key>
           </div>
         )}
       </div>
@@ -62,10 +63,7 @@ export default function Hud({ phrase, progress, canInteract, wrongCount }) {
 // 把通關字串拆成單字,每個字母帶著它在收集順序裡的位置;空格不佔位置
 function wordsOf(phrase) {
   let index = 0
-  return phrase
-    .split(' ')
-    .filter((word) => word.length > 0)
-    .map((word) => [...word].map((letter) => ({ letter, index: index++ })))
+  return phrase.split(' ').map((word) => [...word].map((letter) => ({ letter, index: index++ })))
 }
 
 function letterStyleOf(index, progress) {
@@ -74,12 +72,18 @@ function letterStyleOf(index, progress) {
   return styles.letter
 }
 
+// 通關字串與「按 F」共用的白色圓角底
+const panel = {
+  borderRadius: 999,
+  background: 'rgba(255, 253, 248, 0.92)',
+  boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
+}
+
 const styles = {
   overlay: {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
-    color: '#4a3b35',
   },
   phrase: {
     position: 'absolute',
@@ -89,9 +93,7 @@ const styles = {
     display: 'flex',
     gap: 20,
     padding: '10px 22px',
-    borderRadius: 999,
-    background: 'rgba(255, 253, 248, 0.92)',
-    boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
+    ...panel,
     whiteSpace: 'nowrap',
   },
   word: {
@@ -126,24 +128,13 @@ const styles = {
     gap: 12,
   },
   interact: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
     padding: '10px 24px',
-    borderRadius: 999,
-    background: 'rgba(255, 253, 248, 0.9)',
-    boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
+    ...panel,
     fontSize: 20,
     fontWeight: 600,
-  },
-  key: {
-    display: 'inline-block',
-    minWidth: 28,
-    margin: '0 4px',
-    padding: '2px 8px',
-    borderRadius: 6,
-    border: '1px solid #e3d6c8',
-    borderBottomWidth: 3,
-    background: '#fff',
-    fontFamily: 'inherit',
-    textAlign: 'center',
   },
   wrong: {
     padding: '10px 24px',

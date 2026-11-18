@@ -59,10 +59,11 @@ export default function App() {
 }
 
 const styles = {
-  // 疊在畫布上的各個畫面都繼承這個字型
+  // 疊在畫布上的各個畫面都繼承這個字型與文字顏色
   main: {
     position: 'fixed',
     inset: 0,
     fontFamily: 'system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif',
+    color: '#4a3b35',
   },
 }

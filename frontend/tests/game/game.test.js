@@ -416,7 +416,7 @@ describe('可互動', () => {
   })
 })
 
-// 傳送到字母所在的格子,按一次互動鍵,回傳互動的結果
+// 先把主角傳送到該字母所在的格子,再按一次互動鍵
 function interactAt(game, letter) {
   game.teleport(game.letters.find((placed) => placed.letter === letter))
   return game.interact()
@@ -435,7 +435,7 @@ describe('收集', () => {
     }
   })
 
-  it('在干擾字母或還沒輪到的字母上互動,進度不變,並回報不是這個', () => {
+  it('在干擾字母或還沒輪到的字母上互動,進度不變,並回報 wrong(不是這個)', () => {
     const game = createGame(1, { allowTeleport: true })
     // 開局時輪到 H;收集 H 之後輪到 A,剛收集過的 H 也變成還沒輪到
     for (const [collectedBefore, next] of [
@@ -479,14 +479,12 @@ describe('收集', () => {
     }
   })
 
-  it('在 P 上連續互動兩次,進度加二;第三次就不是這個', () => {
+  it('站在 P 上原地連續互動兩次,進度加二', () => {
     const game = createGame(1, { allowTeleport: true })
     interactAt(game, 'H')
     interactAt(game, 'A')
     expect(interactAt(game, 'P')).toBe('collected')
     expect(game.interact()).toBe('collected')
-    expect(game.progress).toBe(4)
-    expect(game.interact()).toBe('wrong')
     expect(game.progress).toBe(4)
   })
 

@@ -9,7 +9,8 @@ export { WALL_THICKNESS } from './movement.js'
 
 const MAZE_SIZE = 10
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-const TARGETS = PHRASE.replaceAll(' ', '')
+// 依收集順序排列的字母:通關字串去掉空格
+const PHRASE_LETTERS = PHRASE.replaceAll(' ', '')
 // 主角跑步的速度,單位是每秒幾格
 const RUN_SPEED = 1.25
 
@@ -56,7 +57,7 @@ export function createGame(seed, { allowTeleport = false } = {}) {
     start,
     door,
     letters,
-    phrase: TARGETS,
+    phrase: PHRASE_LETTERS,
     get walls() {
       return walls.map((wall) => ({ ...wall }))
     },
@@ -72,7 +73,7 @@ export function createGame(seed, { allowTeleport = false } = {}) {
     interact() {
       const placed = letterAt(letters, player)
       if (placed === undefined) return null
-      if (placed.letter !== TARGETS[progress]) return 'wrong'
+      if (placed.letter !== PHRASE_LETTERS[progress]) return 'wrong'
       progress += 1
       return 'collected'
     },
