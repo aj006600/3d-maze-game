@@ -4,6 +4,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { WebGLRenderer } from 'three'
 
 import { createControls } from './controls.js'
+import { createDogFigure } from './dogFigure.js'
+import { createDogFollower } from './dogFollower.js'
 import { createFollowCamera } from './followCamera.js'
 import { createLetterFigures } from './letterFigures.js'
 import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
@@ -61,6 +63,9 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
     mazeScene.scene.add(letterFigures.object)
     const figure = createPlayerFigure()
     mazeScene.scene.add(figure.object)
+    const dogFigure = createDogFigure()
+    mazeScene.scene.add(dogFigure.object)
+    const dogFollower = createDogFollower(game)
     const { camera, follow } = createFollowCamera(game)
     const controls = createControls(renderer.domElement, game.player.heading)
     controlsRef.current = controls
@@ -99,6 +104,9 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
       const position = toWorld(game.maze, player)
       figure.place(position, player.heading)
       figure.animate(Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE, dt)
+      const dogPose = dogFollower.follow(position, player.heading, dt)
+      dogFigure.place(dogPose.position, dogPose.heading)
+      dogFigure.animate(dogPose.distance, dt)
       follow(position, player.heading, pitch, dt)
       letterFigures.animate(time / 1000, camera.position)
 
@@ -111,6 +119,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
       controlsRef.current = null
       controls.dispose()
       figure.dispose()
+      dogFigure.dispose()
       letterFigures.dispose()
       mazeScene.dispose()
       renderer.dispose()

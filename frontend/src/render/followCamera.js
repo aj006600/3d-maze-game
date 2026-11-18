@@ -4,7 +4,7 @@
 import { PerspectiveCamera } from 'three'
 
 import { CAMERA, SCENE } from '../config.js'
-import { toWorld } from './mazeScene.js'
+import { footprintOf } from './mazeScene.js'
 
 // 鏡頭盯著的那一點離地多高,大約是主角的胸口
 const TARGET_HEIGHT = 1.4
@@ -40,7 +40,8 @@ export function createFollowCamera(game) {
   }
 
   const camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, NEAR, 500)
-  const obstacles = game.walls.map((wall) => expandedFootprintOf(game.maze, wall))
+  // 牆角擴成直角而不是圓角,只會讓鏡頭在牆角附近多拉近一點點
+  const obstacles = game.walls.map((wall) => footprintOf(game.maze, wall, CLEARANCE))
   let currentDistance = CAMERA.distance
 
   return {
@@ -62,14 +63,6 @@ export function createFollowCamera(game) {
       camera.lookAt(x, TARGET_HEIGHT, z)
     },
   }
-}
-
-// 一段牆在世界座標地面上佔據的長方形,四邊各往外擴 CLEARANCE。
-// 牆角擴成直角而不是圓角,只會讓鏡頭在牆角附近多拉近一點點
-function expandedFootprintOf(maze, { minX, maxX, minY, maxY }) {
-  const min = toWorld(maze, { x: minX, y: minY })
-  const max = toWorld(maze, { x: maxX, y: maxY })
-  return { minX: min.x - CLEARANCE, maxX: max.x + CLEARANCE, minZ: min.z - CLEARANCE, maxZ: max.z + CLEARANCE }
 }
 
 // 從 origin 沿著單位向量 direction 走,碰到任何一個長方形之前能走多遠,最多走 limit

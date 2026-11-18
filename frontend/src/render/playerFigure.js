@@ -1,6 +1,8 @@
 // 主角的人:用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,不使用模型或動畫素材檔。
 // 這裡只負責外觀、擺放與動作;主角在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的狀態告訴它。
-import { BoxGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial } from 'three'
+import { BoxGeometry, Group, IcosahedronGeometry, MeshStandardMaterial } from 'three'
+
+import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 
 const SKIN_COLOR = '#f2c7a5'
 const HAIR_COLOR = '#4a2f1d'
@@ -21,10 +23,6 @@ const LEG_SWING = 0.9
 const ARM_SWING = 0.8
 const BOB_HEIGHT = 0.08
 const FORWARD_LEAN = 0.15
-// 跑步動作在起跑與停下時漸強與漸弱的速度:每秒從靜止到全速幾次
-const BLEND_RATE = 8
-// 每秒移動距離低於這個值就當作沒在跑。正面頂著牆時位置只有浮點誤差等級的變化,不該原地跑步
-const MIN_RUN_SPEED = 0.5
 
 /**
  * 建立主角的人,`object` 要由呼叫端加進場景。
@@ -46,13 +44,6 @@ export function createPlayerFigure() {
     shirt: new MeshStandardMaterial({ color: SHIRT_COLOR, roughness: 0.9 }),
     pants: new MeshStandardMaterial({ color: PANTS_COLOR, roughness: 0.9 }),
     shoe: new MeshStandardMaterial({ color: SHOE_COLOR, roughness: 0.9 }),
-  }
-
-  const part = (geometry, material, [width, height, depth], [x, y, z]) => {
-    const mesh = new Mesh(geometry, material)
-    mesh.scale.set(width, height, depth)
-    mesh.position.set(x, y, z)
-    return mesh
   }
 
   // 四肢的原點在關節上,繞 x 軸轉就是前後擺動
@@ -94,23 +85,15 @@ export function createPlayerFigure() {
   const object = new Group()
   object.add(hips)
 
-  // phase 跟著移動的距離前進,腳步與地面的速度一致;blend 是跑步動作的強度,0 是站姿
-  let phase = 0
-  let blend = 0
+  const runCycle = createRunCycle(STRIDE_LENGTH)
 
   return {
     object,
-    place({ x, z }, heading) {
-      object.position.set(x, 0, z)
-      // 人的臉朝 -z。核心的朝向從上方俯瞰是順時針增加,Three.js 繞 y 軸是逆時針,所以取負號
-      object.rotation.y = -heading
+    place(position, heading) {
+      placeFigure(object, position, heading)
     },
     animate(distance, dt) {
-      const running = dt > 0 && distance > MIN_RUN_SPEED * dt
-      phase = (phase + (distance / STRIDE_LENGTH) * Math.PI * 2) % (Math.PI * 2)
-      const target = running ? 1 : 0
-      blend += Math.sign(target - blend) * Math.min(Math.abs(target - blend), BLEND_RATE * dt)
-
+      const { phase, blend } = runCycle.advance(distance, dt)
       const swing = Math.sin(phase) * blend
       leftLeg.rotation.x = swing * LEG_SWING
       rightLeg.rotation.x = -swing * LEG_SWING
