@@ -5,6 +5,7 @@ import { WebGLRenderer } from 'three'
 
 import { createControls } from './controls.js'
 import { createFollowCamera } from './followCamera.js'
+import { createLetterFigures } from './letterFigures.js'
 import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
 import { createPlayerFigure } from './playerFigure.js'
 
@@ -46,6 +47,8 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
     container.appendChild(renderer.domElement)
 
     const mazeScene = createMazeScene(game)
+    const letterFigures = createLetterFigures(game)
+    mazeScene.scene.add(letterFigures.object)
     const figure = createPlayerFigure()
     mazeScene.scene.add(figure.object)
     const { camera, follow } = createFollowCamera()
@@ -76,6 +79,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
       figure.place(position, player.heading)
       figure.animate(Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE, dt)
       follow(position, player.heading)
+      letterFigures.animate(time / 1000, camera.position)
 
       renderer.render(mazeScene.scene, camera)
     })
@@ -86,6 +90,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
       controlsRef.current = null
       controls.dispose()
       figure.dispose()
+      letterFigures.dispose()
       mazeScene.dispose()
       renderer.dispose()
       renderer.domElement.remove()

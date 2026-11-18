@@ -28,5 +28,16 @@ export function createRandom(seed) {
     return items[int(items.length)]
   }
 
-  return { int, pick }
+  /** 回傳一個打亂順序的新陣列,原陣列不變。 */
+  function shuffle(items) {
+    // Fisher-Yates:每一種排列出現的機會都相同
+    const shuffled = [...items]
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = int(i + 1)
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  }
+
+  return { int, pick, shuffle }
 }
