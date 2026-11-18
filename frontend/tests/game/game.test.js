@@ -1,4 +1,4 @@
-// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點與門,主角的移動與碰撞,以及測試用的傳送 hook。
+// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,以及測試用的傳送 hook。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,6 +13,7 @@ const OFFSETS = {
 }
 
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1)
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 function cellsOf(maze) {
   const cells = []
@@ -40,6 +41,7 @@ function layoutOf(game) {
     maze: cellsOf(game.maze).map((cell) => game.maze.openings(cell).sort()),
     start: game.start,
     door: game.door,
+    letters: game.letters,
   }
 }
 
@@ -131,6 +133,39 @@ describe('createGame 的門', () => {
   it('四面外牆都可能開門', () => {
     const sides = new Set(SEEDS.map((seed) => createGame(seed).door.side))
     expect(sides).toEqual(new Set(Object.keys(OFFSETS)))
+  })
+})
+
+describe('createGame 的字母', () => {
+  it('A 到 Z 各一個,依字母順序列出', () => {
+    for (const seed of SEEDS) {
+      const letters = createGame(seed).letters.map(({ letter }) => letter)
+      expect(letters.join(''), `seed ${seed}`).toBe(ALPHABET)
+    }
+  })
+
+  it('每個字母都在死路裡', () => {
+    for (const seed of SEEDS) {
+      const { maze, letters } = createGame(seed)
+      for (const { letter, col, row } of letters) {
+        expect(maze.openings({ col, row }), `seed ${seed} ${letter}`).toHaveLength(1)
+      }
+    }
+  })
+
+  it('沒有兩個字母在同一格', () => {
+    for (const seed of SEEDS) {
+      const cells = new Set(createGame(seed).letters.map(keyOf))
+      expect(cells.size, `seed ${seed}`).toBe(26)
+    }
+  })
+
+  it('字母在迷宮裡的位置不照字母順序排列', () => {
+    for (const seed of SEEDS) {
+      const { letters } = createGame(seed)
+      const byPosition = [...letters].sort((a, b) => a.row - b.row || a.col - b.col).map(({ letter }) => letter)
+      expect(byPosition.join(''), `seed ${seed}`).not.toBe(ALPHABET)
+    }
   })
 })
 

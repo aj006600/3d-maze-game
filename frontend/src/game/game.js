@@ -7,8 +7,9 @@ import { createRandom } from './random.js'
 export { WALL_THICKNESS } from './movement.js'
 
 const MAZE_SIZE = 10
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 // A 到 Z 各要放進一個不同的死路
-const MIN_DEAD_ENDS = 26
+const MIN_DEAD_ENDS = LETTERS.length
 // 主角跑步的速度,單位是每秒幾格
 const RUN_SPEED = 1.25
 
@@ -26,6 +27,8 @@ const RUN_SPEED = 1.25
  *   row 往南遞增,col 往東遞增;外牆不會出現在這裡。格子必須在迷宮內,界外的座標會讀到別格的資料。
  * - `start`:起點的格子 `{ col, row }`,是迷宮中央四格之一。
  * - `door`:門的位置 `{ col, row, side }`,也就是 `(col, row)` 這一格朝 `side` 那一側的外牆。
+ * - `letters`:A 到 Z 各一個字母所在的格子 `{ letter, col, row }`,依字母順序排列。
+ *   每個字母在不同的死路裡,多出來的死路沒有字母。字母被收集後仍留在原地,所以這份配置整局不變。
  * - `player`:主角當下的 `{ x, y, heading }`。每次讀取都是一份新的快照,之後的推進不會改到它。
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
@@ -37,12 +40,14 @@ export function createGame(seed, { allowTeleport = false } = {}) {
   const maze = generateMazeWithEnoughDeadEnds(random)
   const start = pickStart(random)
   const door = pickDoor(random)
+  const letters = placeLetters(random, maze)
   const walls = wallsOf(maze)
   const player = { x: start.col + 0.5, y: start.row + 0.5, heading: 0 }
   return {
     maze,
     start,
     door,
+    letters,
     get player() {
       return { ...player }
     },
@@ -85,6 +90,11 @@ function pickDoor(random) {
     )
   }
   return random.pick(segments)
+}
+
+function placeLetters(random, maze) {
+  const deadEnds = random.shuffle(deadEndsOf(maze))
+  return [...LETTERS].map((letter, i) => ({ letter, ...deadEnds[i] }))
 }
 
 function generateMazeWithEnoughDeadEnds(random) {
