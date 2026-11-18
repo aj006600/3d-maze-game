@@ -28,6 +28,8 @@ const RUN_SPEED = 1.25
  * - `letters`:A 到 Z 各一個字母所在的格子 `{ letter, col, row }`,依字母順序排列。
  *   每個字母在不同的死路裡,起點與門所在的格子不放字母,多出來的死路也沒有字母。
  *   字母被收集後仍留在原地,所以這份配置整局不變。
+ * - `walls`:擋住主角的每一段牆,各是一個 `{ minX, maxX, minY, maxY }` 的長方形,單位是格。
+ *   外牆在裡面,門鎖著時也在裡面。每次讀取都是一份新的副本,改了它不會改到碰撞。
  * - `player`:主角當下的 `{ x, y, heading }`。每次讀取都是一份新的快照,之後的推進不會改到它。
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
@@ -44,6 +46,9 @@ export function createGame(seed, { allowTeleport = false } = {}) {
     start,
     door,
     letters,
+    get walls() {
+      return walls.map((wall) => ({ ...wall }))
+    },
     get player() {
       return { ...player }
     },

@@ -13,11 +13,12 @@ import {
   Scene,
 } from 'three'
 
+import { SCENE } from '../config.js'
 import { WALL_THICKNESS as WALL_THICKNESS_IN_CELLS } from '../game/game.js'
 
-/** 一格在世界座標裡的邊長。 */
-export const CELL_SIZE = 4
-const WALL_HEIGHT = 4
+/** 一格在世界座標裡的邊長。一格扣掉兩側各半個牆厚就是走道寬度,所以這個邊長由設定的走道寬度推回來。 */
+export const CELL_SIZE = SCENE.corridorWidth / (1 - WALL_THICKNESS_IN_CELLS)
+const WALL_HEIGHT = SCENE.wallHeight
 // 牆厚跟著遊戲核心的碰撞走,畫面上的牆才會與擋住主角的位置一致
 const WALL_THICKNESS = WALL_THICKNESS_IN_CELLS * CELL_SIZE
 const DOOR_HEIGHT = 3.2
