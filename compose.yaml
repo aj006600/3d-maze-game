@@ -1,0 +1,28 @@
+# Base:只定義服務與內部接線;對外曝露由 override 決定(compose.local.yaml / compose.deploy.yaml)。
+services:
+  backend:
+    build: ./backend
+    # 本機 build 預設 <APP_NAME>-backend:latest;make deploy 傳入 IMAGE/TAG 改拉 CI 映像
+    image: ${IMAGE:-${APP_NAME:-3d-maze-game}}-backend:${TAG:-latest}
+    restart: unless-stopped
+    # 唯一設定來源,不進版控:make local 用 .env,make deploy 用主機自備的 .env.<env>。
+    # 用專職的 ENV_FILE 選檔,不用 APP_ENV 的值反推:否則主機忘了改檔裡的 APP_ENV,
+    # 就會安靜地載到別的環境的設定。
+    env_file:
+      - ${ENV_FILE:-.env}
+    # 不對外開埠,由 frontend nginx 代理 /api;healthcheck 用 python 因 bookworm-slim 無 curl
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    build: ./frontend
+    image: ${IMAGE:-${APP_NAME:-3d-maze-game}}-frontend:${TAG:-latest}
+    restart: unless-stopped
+    # 等 backend healthy 再起 nginx,否則 uvicorn 未 listen 前 /api 會回 502
+    depends_on:
+      backend:
+        condition: service_healthy
