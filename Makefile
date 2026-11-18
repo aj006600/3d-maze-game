@@ -87,7 +87,7 @@ test:
 
 # 與 CI test-frontend 同一個 frontend dev stage。不經 compose:前端測試不讀 .env,也不需要 backend。
 # 每次都 build:原始碼與 package-lock.json 都烤在 image 裡,不重建會跑到舊程式碼。
-# tag 帶 LOCAL_TAG 的理由與上面相同,image 也帶專案 label,make clean 清得到
+# tag 帶 LOCAL_TAG:多個 worktree 同時跑才不會搶同一個 image 名字、跑到別人的程式碼。image 帶專案 label,make clean 清得到
 FRONTEND_DEV_IMAGE := $(APP_NAME)-frontend-dev:$(LOCAL_TAG)
 
 test-frontend:

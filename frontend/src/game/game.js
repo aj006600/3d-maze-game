@@ -13,19 +13,19 @@ const MIN_DEAD_ENDS = 26
  * seed 是整數。回傳的物件:
  * - `maze.size`:迷宮每邊的格數。
  * - `maze.openings({ col, row })`:該格有通道的那幾側,值為 `'north'`、`'east'`、`'south'`、`'west'`。
- *   row 往南遞增,col 往東遞增;外牆不會出現在這裡。
+ *   row 往南遞增,col 往東遞增;外牆不會出現在這裡。格子必須在迷宮內,界外的座標會讀到別格的資料。
  * - `start`:起點的格子 `{ col, row }`,是迷宮中央四格之一。
  * - `door`:門的位置 `{ col, row, side }`,也就是 `(col, row)` 這一格朝 `side` 那一側的外牆。
  */
 export function createGame(seed) {
   const random = createRandom(seed)
-  const maze = generatePlayableMaze(random)
+  const maze = generateMazeWithEnoughDeadEnds(random)
   const start = pickStart(random)
   const door = pickDoor(random)
   return { maze, start, door }
 }
 
-// 每邊格數是偶數,正中央是四格,由 seed 挑其中一格
+// MAZE_SIZE 必須是偶數,正中央才剛好是四格
 function pickStart(random) {
   const middle = [MAZE_SIZE / 2 - 1, MAZE_SIZE / 2]
   return { col: random.pick(middle), row: random.pick(middle) }
@@ -46,7 +46,7 @@ function pickDoor(random) {
   return random.pick(segments)
 }
 
-function generatePlayableMaze(random) {
+function generateMazeWithEnoughDeadEnds(random) {
   // 死路不足時用同一個產生器接著再挖一張。產生器的數列由 seed 決定,所以重挖幾次、最後是哪一張都是固定的
   for (;;) {
     const maze = generateMaze(MAZE_SIZE, random)

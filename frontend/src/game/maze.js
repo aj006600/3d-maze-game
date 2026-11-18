@@ -13,13 +13,15 @@ const SIDES = Object.keys(OFFSETS)
 const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
 
 /**
- * 用給定的亂數產生器挖出一張 size×size 的迷宮。
+ * 用給定的亂數產生器挖出一張每邊 size 格的正方形迷宮。
  *
- * 回傳的 maze 只提供查詢:`openings(cell)` 列出該格有通道的那幾側。
- * 外牆一律不算開口;門由呼叫端另外放。
+ * 回傳的 maze 只提供查詢:
+ * - `size`:每邊的格數。
+ * - `openings(cell)`:該格有通道的那幾側。外牆一律不算開口,門由呼叫端另外放。
+ *   cell 必須在迷宮內;界外的座標不會報錯,而是讀到別格的資料。
  */
 export function generateMaze(size, random) {
-  const open = Array.from({ length: size * size }, () => new Set())
+  const openSides = Array.from({ length: size * size }, () => new Set())
   const indexOf = (cell) => cell.row * size + cell.col
   const inside = (cell) => cell.col >= 0 && cell.col < size && cell.row >= 0 && cell.row < size
 
@@ -28,8 +30,8 @@ export function generateMaze(size, random) {
   const active = [first]
 
   while (active.length > 0) {
-    const at = random.int(active.length)
-    const cell = active[at]
+    const activeIndex = random.int(active.length)
+    const cell = active[activeIndex]
     const choices = SIDES.filter((side) => {
       const next = step(cell, side)
       return inside(next) && !visited.has(indexOf(next))
@@ -37,22 +39,22 @@ export function generateMaze(size, random) {
 
     if (choices.length === 0) {
       // 與最後一個交換後移除:順序會變,但變法是固定的,不影響決定性
-      active[at] = active[active.length - 1]
+      active[activeIndex] = active[active.length - 1]
       active.pop()
       continue
     }
 
     const side = random.pick(choices)
     const next = step(cell, side)
-    open[indexOf(cell)].add(side)
-    open[indexOf(next)].add(OPPOSITE[side])
+    openSides[indexOf(cell)].add(side)
+    openSides[indexOf(next)].add(OPPOSITE[side])
     visited.add(indexOf(next))
     active.push(next)
   }
 
   return {
     size,
-    openings: (cell) => [...open[indexOf(cell)]],
+    openings: (cell) => [...openSides[indexOf(cell)]],
   }
 }
 

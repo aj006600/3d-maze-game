@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 # npm ci 預設連 devDependencies 一起裝:build 要用 vite,dev 要用 vitest
 RUN npm ci
 
-# dev:測試用(vitest),永不部署;make test-frontend 與 CI 的 test-frontend job 都跑這個 stage
+# dev:測試用(vitest),永不部署
 FROM base AS dev
 COPY . .
 CMD ["npm", "test"]

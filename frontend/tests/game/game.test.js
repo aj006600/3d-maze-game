@@ -24,11 +24,12 @@ function cellsOf(maze) {
   return cells
 }
 
+function stepOf(cell, side) {
+  return { col: cell.col + OFFSETS[side].col, row: cell.row + OFFSETS[side].row }
+}
+
 function neighborsOf(maze, cell) {
-  return maze.openings(cell).map((side) => ({
-    col: cell.col + OFFSETS[side].col,
-    row: cell.row + OFFSETS[side].row,
-  }))
+  return maze.openings(cell).map((side) => stepOf(cell, side))
 }
 
 const keyOf = (cell) => `${cell.col},${cell.row}`
@@ -65,7 +66,9 @@ describe('createGame 的決定性', () => {
 
 describe('createGame 的迷宮', () => {
   it('是 10×10 的正方形', () => {
-    expect(createGame(1).maze.size).toBe(10)
+    for (const seed of SEEDS) {
+      expect(createGame(seed).maze.size, `seed ${seed}`).toBe(10)
+    }
   })
 
   it('任兩格之間恰有一條路', () => {
@@ -109,9 +112,9 @@ describe('createGame 的起點', () => {
     }
   })
 
-  it('落在中央四格的哪一格由 seed 決定', () => {
+  it('中央四格都可能成為起點', () => {
     const starts = new Set(SEEDS.map((seed) => keyOf(createGame(seed).start)))
-    expect(starts).toEqual(new Set(CENTER))
+    expect(starts.size).toBe(CENTER.length)
   })
 })
 
@@ -120,13 +123,12 @@ describe('createGame 的門', () => {
     for (const seed of SEEDS) {
       const { maze, door } = createGame(seed)
       const inside = (cell) => cell.col >= 0 && cell.col < maze.size && cell.row >= 0 && cell.row < maze.size
-      const beyond = { col: door.col + OFFSETS[door.side].col, row: door.row + OFFSETS[door.side].row }
       expect(inside(door), `seed ${seed}`).toBe(true)
-      expect(inside(beyond), `seed ${seed}`).toBe(false)
+      expect(inside(stepOf(door, door.side)), `seed ${seed}`).toBe(false)
     }
   })
 
-  it('開在哪一面外牆由 seed 決定', () => {
+  it('四面外牆都可能開門', () => {
     const sides = new Set(SEEDS.map((seed) => createGame(seed).door.side))
     expect(sides).toEqual(new Set(Object.keys(OFFSETS)))
   })
