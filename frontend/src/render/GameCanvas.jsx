@@ -13,7 +13,7 @@ import { createPlayerFigure } from './playerFigure.js'
 const MAX_FRAME_SECONDS = 0.1
 
 /**
- * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向。
+ * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向與調整俯仰角。
  *
  * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變。
  * 父元件透過 ref 可以拿到 `{ lockPointer() }`,用它把游標鎖在畫布上。
@@ -51,7 +51,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
     mazeScene.scene.add(letterFigures.object)
     const figure = createPlayerFigure()
     mazeScene.scene.add(figure.object)
-    const { camera, follow } = createFollowCamera()
+    const { camera, follow } = createFollowCamera(game)
     const controls = createControls(renderer.domElement, game.player.heading)
     controlsRef.current = controls
 
@@ -72,13 +72,14 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
       lastTime = time
 
       const before = game.player
-      if (activeRef.current) game.step({ ...controls.read(), dt })
+      const { pitch, ...input } = controls.read()
+      if (activeRef.current) game.step({ ...input, dt })
       const player = game.player
 
       const position = toWorld(game.maze, player)
       figure.place(position, player.heading)
       figure.animate(Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE, dt)
-      follow(position, player.heading)
+      follow(position, player.heading, pitch, dt)
       letterFigures.animate(time / 1000, camera.position)
 
       renderer.render(mazeScene.scene, camera)

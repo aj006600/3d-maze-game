@@ -183,6 +183,29 @@ describe('createGame 的字母', () => {
   })
 })
 
+describe('createGame 的牆', () => {
+  // (col, row) 這一格朝 side 那一側的邊線中點,以格為單位
+  const sideMidpointOf = (cell, side) => ({
+    x: cell.col + 0.5 + OFFSETS[side].col / 2,
+    y: cell.row + 0.5 + OFFSETS[side].row / 2,
+  })
+  const isCovered = (walls, { x, y }) =>
+    walls.some((wall) => wall.minX <= x && x <= wall.maxX && wall.minY <= y && y <= wall.maxY)
+
+  it('沒有通道的每一側都立著牆,外牆與鎖著的門也是;有通道的那一側沒有牆', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed)
+      const { walls } = game
+      for (const cell of cellsOf(game.maze)) {
+        for (const side of Object.keys(OFFSETS)) {
+          const isOpen = game.maze.openings(cell).includes(side)
+          expect(isCovered(walls, sideMidpointOf(cell, side)), `seed ${seed} ${keyOf(cell)} ${side}`).toBe(!isOpen)
+        }
+      }
+    }
+  })
+})
+
 // 主角所在的格子:x 往東、y 往南,以格為單位,格子 (col, row) 涵蓋 col ≤ x < col + 1
 const cellOf = (player) => ({ col: Math.floor(player.x), row: Math.floor(player.y) })
 

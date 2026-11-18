@@ -35,7 +35,7 @@ make help           # 其餘指令
 │   └── tests/ · pyproject.toml · uv.lock · Dockerfile
 ├── frontend/               # React + Vite(多階段:dev 含 Vitest、build 出靜態檔、nginx 出貨)
 │   ├── src/App.jsx         # 首頁就是遊戲:把介面層疊在畫布上,並決定目前停在哪個畫面
-│   ├── src/config.js       # 決定玩到哪一局的設定(seed)
+│   ├── src/config.js       # 試玩後要調整的設定:seed、場景比例(牆高、走道寬度)、鏡頭距離與俯仰角
 │   ├── src/game/           # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
 │   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭與鍵鼠輸入,不持有規則
 │   ├── src/ui/             # 介面層:疊在畫布上的 React 畫面與提示,不持有規則
