@@ -1,6 +1,6 @@
 // 把一局遊戲畫在畫布上的 React component:負責 WebGLRenderer、輸入、每一幀的推進與畫面大小。
 // React 不會代管 Three.js 的物件,所以建立與釋放都在同一個 effect 裡自己處理。
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { WebGLRenderer } from 'three'
 
 import { createControls } from './controls.js'
@@ -14,11 +14,28 @@ const MAX_FRAME_SECONDS = 0.1
 /**
  * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向。
  *
+ * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變。
+ * 父元件透過 ref 可以拿到 `{ lockPointer() }`,用它把游標鎖在畫布上。
+ * 父元件必須在使用者的點擊或按鍵事件裡同步呼叫 `lockPointer()`,否則瀏覽器會拒絕鎖定。
+ *
  * 換一局遊戲(`game` 換成另一個物件)時,整個場景會釋放後重建。
  * 卸載時釋放 renderer、geometry 與 material,畫布也會從頁面上移除。
  */
-export default function GameCanvas({ game }) {
+const GameCanvas = forwardRef(function GameCanvas({ game, active }, ref) {
   const containerRef = useRef(null)
+  const controlsRef = useRef(null)
+  // 動畫迴圈只在 game 換掉時重建,所以迴圈裡要透過 ref 讀到最新的 active
+  const activeRef = useRef(active)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  useImperativeHandle(ref, () => ({
+    lockPointer() {
+      controlsRef.current?.lock()
+    },
+  }))
 
   useEffect(() => {
     const container = containerRef.current
@@ -33,6 +50,7 @@ export default function GameCanvas({ game }) {
     mazeScene.scene.add(figure.object)
     const { camera, follow } = createFollowCamera()
     const controls = createControls(renderer.domElement, game.player.heading)
+    controlsRef.current = controls
 
     function resize() {
       const { clientWidth: width, clientHeight: height } = container
@@ -51,7 +69,7 @@ export default function GameCanvas({ game }) {
       lastTime = time
 
       const before = game.player
-      game.step({ ...controls.read(), dt })
+      if (activeRef.current) game.step({ ...controls.read(), dt })
       const player = game.player
 
       const position = toWorld(game.maze, player)
@@ -65,6 +83,7 @@ export default function GameCanvas({ game }) {
     return () => {
       observer.disconnect()
       renderer.setAnimationLoop(null)
+      controlsRef.current = null
       controls.dispose()
       figure.dispose()
       mazeScene.dispose()
@@ -74,4 +93,6 @@ export default function GameCanvas({ game }) {
   }, [game])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-}
+})
+
+export default GameCanvas
