@@ -3,6 +3,9 @@
 /** 決定整局配置的 seed。換一個整數就得到另一張合乎規則的迷宮。 */
 export const SEED = 20261118
 
+/** 通關字串,畫面上方照這裡的寫法顯示。空格只用來分開單字,不算要收集的字母。 */
+export const PHRASE = 'HAPPY BIRTHDAY'
+
 const fromDegrees = (value) => (value * Math.PI) / 180
 
 /**

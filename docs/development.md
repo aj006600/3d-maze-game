@@ -11,7 +11,7 @@ make local-down  # 停止並清理 container 與 network
 
 乾淨 clone 不必先建任何檔案:`make local` 發現缺 `.env` 時會從 `.env.example` 複製一份。
 
-- 前端 → http://localhost:3000(首頁先顯示開始畫面,按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,Esc 放開游標,再點一下畫面繼續)
+- 前端 → http://localhost:3000(首頁先顯示開始畫面,按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,站進有字母的死路按 F 收集,Esc 放開游標,再點一下畫面繼續)
 - 後端 → http://localhost:8000/health
 
 兩個埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。

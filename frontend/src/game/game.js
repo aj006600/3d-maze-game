@@ -1,5 +1,6 @@
-// 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角。
+// 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
+import { PHRASE } from '../config.js'
 import { deadEndsOf, generateMaze } from './maze.js'
 import { moveAgainstWalls, wallsOf } from './movement.js'
 import { createRandom } from './random.js'
@@ -8,6 +9,8 @@ export { WALL_THICKNESS } from './movement.js'
 
 const MAZE_SIZE = 10
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+// 依收集順序排列的字母:通關字串去掉空格
+const PHRASE_LETTERS = PHRASE.replaceAll(' ', '')
 // 主角跑步的速度,單位是每秒幾格
 const RUN_SPEED = 1.25
 
@@ -28,6 +31,13 @@ const RUN_SPEED = 1.25
  * - `letters`:A 到 Z 各一個字母所在的格子 `{ letter, col, row }`,依字母順序排列。
  *   每個字母在不同的死路裡,起點與門所在的格子不放字母,多出來的死路也沒有字母。
  *   字母被收集後仍留在原地,所以這份配置整局不變。
+ * - `phrase`:通關字串去掉空格後的字母,依收集的順序排列。
+ * - `progress`:已收集的字母數,從 0 開始,收集完時等於 `phrase` 的長度。
+ * - `canInteract`:主角所在的格子是不是放著字母的死路。只看位置,與進度無關。
+ * - `interact()`:按下一次互動鍵,回傳這次互動的結果:
+ *   - `'collected'`:主角所在的字母正是當下輪到的那一個,進度加一。字母留在原地,之後輪到時可以再收集。
+ *   - `'wrong'`:主角所在的字母不是當下輪到的那一個,進度不變。全部收集完之後,每個字母都不是當下輪到的那一個。
+ *   - `null`:主角不在有字母的死路格內,這次互動沒有任何效果。
  * - `walls`:擋住主角的每一段牆,各是一個 `{ minX, maxX, minY, maxY }` 的長方形,單位是格。
  *   外牆在裡面,門鎖著時也在裡面。每次讀取都是一份新的副本,改了它不會改到碰撞。
  * - `player`:主角當下的 `{ x, y, heading }`。每次讀取都是一份新的快照,之後的推進不會改到它。
@@ -41,16 +51,31 @@ export function createGame(seed, { allowTeleport = false } = {}) {
   const { maze, start, door, letters } = generateLayout(random)
   const walls = wallsOf(maze)
   const player = { x: start.col + 0.5, y: start.row + 0.5, heading: 0 }
+  let progress = 0
   return {
     maze,
     start,
     door,
     letters,
+    phrase: PHRASE_LETTERS,
     get walls() {
       return walls.map((wall) => ({ ...wall }))
     },
     get player() {
       return { ...player }
+    },
+    get progress() {
+      return progress
+    },
+    get canInteract() {
+      return letterAt(letters, player) !== undefined
+    },
+    interact() {
+      const placed = letterAt(letters, player)
+      if (placed === undefined) return null
+      if (placed.letter !== PHRASE_LETTERS[progress]) return 'wrong'
+      progress += 1
+      return 'collected'
     },
     step({ forward, right, heading, dt }) {
       player.heading = heading
@@ -111,6 +136,12 @@ function generateLayout(random) {
 function placeLetters(random, candidates) {
   const shuffled = random.shuffle(candidates)
   return [...LETTERS].map((letter, i) => ({ letter, ...shuffled[i] }))
+}
+
+// 字母都在死路裡,所以主角所在的格子有字母,就等於主角站在有字母的死路裡
+function letterAt(letters, { x, y }) {
+  const cell = { col: Math.floor(x), row: Math.floor(y) }
+  return letters.find((placed) => isSameCell(placed, cell))
 }
 
 function isSameCell(a, b) {

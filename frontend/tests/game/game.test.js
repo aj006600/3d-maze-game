@@ -1,4 +1,5 @@
-// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,以及測試用的傳送 hook。
+// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
+// 依通關字串收集字母,以及測試用的傳送 hook。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -390,6 +391,110 @@ describe('主角與牆', () => {
           expect(cellOf(game.player), `seed ${seed} ${keyOf(cell)} ${side}`).toEqual(stepOf(cell, side))
         }
       }
+    }
+  })
+})
+
+describe('通關字串', () => {
+  it('固定是 HAPPY BIRTHDAY 去掉空格的 13 個字母,換 seed 也不變', () => {
+    for (const seed of SEEDS) {
+      expect(createGame(seed).phrase, `seed ${seed}`).toBe('HAPPYBIRTHDAY')
+    }
+  })
+})
+
+describe('可互動', () => {
+  it('主角站在有字母的死路格內時可以互動,其他格子都不行', () => {
+    for (const seed of SEEDS.slice(0, 5)) {
+      const game = createGame(seed, { allowTeleport: true })
+      const letterCells = new Set(game.letters.map(keyOf))
+      for (const cell of cellsOf(game.maze)) {
+        game.teleport(cell)
+        expect(game.canInteract, `seed ${seed} ${keyOf(cell)}`).toBe(letterCells.has(keyOf(cell)))
+      }
+    }
+  })
+})
+
+// 先把主角傳送到該字母所在的格子,再按一次互動鍵
+function interactAt(game, letter) {
+  game.teleport(game.letters.find((placed) => placed.letter === letter))
+  return game.interact()
+}
+
+describe('收集', () => {
+  it('在當下輪到的字母上互動,進度加一,字母留在原地', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const before = layoutOf(game).letters
+      expect(game.progress, `seed ${seed}`).toBe(0)
+      expect(interactAt(game, 'H'), `seed ${seed}`).toBe('collected')
+      expect(game.progress, `seed ${seed}`).toBe(1)
+      expect(layoutOf(game).letters, `seed ${seed}`).toEqual(before)
+      expect(game.canInteract, `seed ${seed}`).toBe(true)
+    }
+  })
+
+  it('在干擾字母或還沒輪到的字母上互動,進度不變,並回報 wrong(不是這個)', () => {
+    const game = createGame(1, { allowTeleport: true })
+    // 開局時輪到 H;收集 H 之後輪到 A,剛收集過的 H 也變成還沒輪到
+    for (const [collectedBefore, next] of [
+      ['', 'H'],
+      ['H', 'A'],
+    ]) {
+      for (const letter of collectedBefore) interactAt(game, letter)
+      const progress = game.progress
+      for (const letter of ALPHABET.replace(next, '')) {
+        expect(interactAt(game, letter), `${next} 輪到時互動 ${letter}`).toBe('wrong')
+        expect(game.progress, `${next} 輪到時互動 ${letter}`).toBe(progress)
+      }
+    }
+  })
+
+  it('不在字母所在的死路格內時互動,沒有任何效果', () => {
+    for (const seed of SEEDS.slice(0, 5)) {
+      const game = createGame(seed, { allowTeleport: true })
+      interactAt(game, 'H')
+      const letterCells = new Set(game.letters.map(keyOf))
+      for (const cell of cellsOf(game.maze).filter((cell) => !letterCells.has(keyOf(cell)))) {
+        game.teleport(cell)
+        expect(game.interact(), `seed ${seed} ${keyOf(cell)}`).toBeNull()
+        expect(game.progress, `seed ${seed} ${keyOf(cell)}`).toBe(1)
+      }
+    }
+  })
+
+  it('只是走進字母所在的死路再走出來,沒有互動就沒有任何效果', () => {
+    const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const h = game.letters.find(({ letter }) => letter === 'H')
+      const [opening] = game.maze.openings(h)
+      // 從死路開口外的那一格出發,跑進字母那一格的中央再跑回來
+      game.teleport(stepOf(h, opening))
+      run(game, { forward: 1, heading: HEADINGS[OPPOSITE[opening]] }, 1 / RUN_SPEED)
+      expect(cellOf(game.player), `seed ${seed}`).toEqual({ col: h.col, row: h.row })
+      run(game, { forward: 1, heading: HEADINGS[opening] }, 1 / RUN_SPEED)
+      expect(game.progress, `seed ${seed}`).toBe(0)
+    }
+  })
+
+  it('站在 P 上原地連續互動兩次,進度加二', () => {
+    const game = createGame(1, { allowTeleport: true })
+    interactAt(game, 'H')
+    interactAt(game, 'A')
+    expect(interactAt(game, 'P')).toBe('collected')
+    expect(game.interact()).toBe('collected')
+    expect(game.progress).toBe(4)
+  })
+
+  it('依序到每個字母互動就收集完 13 個,H、A、P、Y 第二次輪到時回到同一個位置再收集', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const [i, letter] of [...'HAPPYBIRTHDAY'].entries()) {
+        expect(interactAt(game, letter), `seed ${seed} 第 ${i + 1} 個 ${letter}`).toBe('collected')
+      }
+      expect(game.progress, `seed ${seed}`).toBe(13)
     }
   })
 })

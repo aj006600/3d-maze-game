@@ -1,5 +1,7 @@
 // 開始畫面:打開網頁時第一眼看到的標題、目標與操作說明,讓玩家不需要別人教就能開始玩。
 // 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上,也就不會意外鎖定游標。
+import { PHRASE } from '../config.js'
+import Key from './Key.jsx'
 
 const CONTROL_HINTS = [
   { keys: ['W', 'A', 'S', 'D'], action: 'W 前進、S 倒退、A 與 D 橫移' },
@@ -18,15 +20,13 @@ export default function StartScreen({ onStart }) {
     <div style={styles.backdrop}>
       <section style={styles.panel}>
         <h1 style={styles.title}>生日迷宮</h1>
-        <p style={styles.goal}>在迷宮的死路裡依序收集 HAPPY BIRTHDAY 的字母,集滿後從打開的門走出去。</p>
+        <p style={styles.goal}>在迷宮的死路裡依序收集 {PHRASE} 的字母,集滿後從打開的門走出去。</p>
         <ul style={styles.hints}>
           {CONTROL_HINTS.map(({ keys, action }) => (
             <li key={action} style={styles.hint}>
               <span style={styles.keys}>
                 {keys.map((key) => (
-                  <kbd key={key} style={styles.key}>
-                    {key}
-                  </kbd>
+                  <Key key={key}>{key}</Key>
                 ))}
               </span>
               <span>{action}</span>
@@ -51,8 +51,6 @@ const styles = {
     padding: 16,
     background: 'rgba(255, 244, 230, 0.55)',
     backdropFilter: 'blur(4px)',
-    fontFamily: 'system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif',
-    color: '#4a3b35',
   },
   panel: {
     width: '100%',
@@ -92,19 +90,6 @@ const styles = {
     display: 'flex',
     gap: 4,
     justifyContent: 'flex-end',
-  },
-  // border-box 讓 minWidth 包含 padding 與邊框,W A S D 四顆鍵才放得進 keys 那一欄
-  key: {
-    boxSizing: 'border-box',
-    minWidth: 28,
-    padding: '3px 6px',
-    borderRadius: 6,
-    border: '1px solid #e3d6c8',
-    borderBottomWidth: 3,
-    background: '#fff',
-    fontFamily: 'inherit',
-    fontSize: 14,
-    textAlign: 'center',
   },
   startButton: {
     padding: '12px 48px',
