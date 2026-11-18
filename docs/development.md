@@ -11,7 +11,7 @@ make local-down  # 停止並清理 container 與 network
 
 乾淨 clone 不必先建任何檔案:`make local` 發現缺 `.env` 時會從 `.env.example` 複製一份。
 
-- 前端 → http://localhost:3000(首頁就是遊戲畫面)
+- 前端 → http://localhost:3000(首頁就是遊戲畫面:點一下畫面鎖定游標,WASD 跑、滑鼠左右移動轉向,Esc 放開游標)
 - 後端 → http://localhost:8000/health
 
 兩個埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。
@@ -72,6 +72,10 @@ make test-frontend ARGS="-t 死路"        # 只跑名字符合的測試
 `frontend/tests/` 鏡射 `frontend/src/` 的結構。遊戲核心(`frontend/src/game/`)的測試只透過它的公開介面
 `createGame` 給輸入、讀狀態,不測內部的部件。渲染層(`frontend/src/render/`)沒有自動化測試,
 畫面的驗證是開實際頁面截圖、檢查 console 沒有錯誤。
+
+驗證畫面時不必每次真的走過整張迷宮:開 `http://localhost:3000/?teleport`,在 console 呼叫
+`window.teleport(col, row)`,主角就會被移到那一格的中央(col 往東、row 往南,從 0 數起)。
+這個傳送 hook 預設關閉,網址沒帶 `?teleport` 時 `window.teleport` 不存在,正常遊玩碰不到它。
 
 ### Testing workflow
 

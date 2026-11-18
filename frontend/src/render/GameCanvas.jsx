@@ -1,12 +1,18 @@
-// 把一局遊戲畫在畫布上的 React component:負責 WebGLRenderer、鏡頭與畫面大小。
+// 把一局遊戲畫在畫布上的 React component:負責 WebGLRenderer、輸入、每一幀的推進與畫面大小。
 // React 不會代管 Three.js 的物件,所以建立與釋放都在同一個 effect 裡自己處理。
 import { useEffect, useRef } from 'react'
-import { PerspectiveCamera, WebGLRenderer } from 'three'
+import { WebGLRenderer } from 'three'
 
-import { createMazeScene } from './mazeScene.js'
+import { createControls } from './controls.js'
+import { createFollowCamera } from './followCamera.js'
+import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
+import { createPlayerFigure } from './playerFigure.js'
+
+// 一幀最多推進幾秒。分頁切走時動畫迴圈會停下,切回來的第一幀不該讓主角一口氣跑出一大段
+const MAX_FRAME_SECONDS = 0.1
 
 /**
- * 填滿父元素的遊戲畫布。
+ * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向。
  *
  * 換一局遊戲(`game` 換成另一個物件)時,整個場景會釋放後重建。
  * 卸載時釋放 renderer、geometry 與 material,畫布也會從頁面上移除。
@@ -23,7 +29,10 @@ export default function GameCanvas({ game }) {
     container.appendChild(renderer.domElement)
 
     const mazeScene = createMazeScene(game)
-    const camera = createOverviewCamera(mazeScene.width)
+    const figure = createPlayerFigure()
+    mazeScene.scene.add(figure.object)
+    const { camera, follow } = createFollowCamera()
+    const controls = createControls(renderer.domElement, game.player.heading)
 
     function resize() {
       const { clientWidth: width, clientHeight: height } = container
@@ -36,11 +45,28 @@ export default function GameCanvas({ game }) {
     const observer = new ResizeObserver(resize)
     observer.observe(container)
 
-    renderer.setAnimationLoop(() => renderer.render(mazeScene.scene, camera))
+    let lastTime = null
+    renderer.setAnimationLoop((time) => {
+      const dt = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, MAX_FRAME_SECONDS)
+      lastTime = time
+
+      const before = game.player
+      game.step({ ...controls.read(), dt })
+      const player = game.player
+
+      const position = toWorld(game.maze, player)
+      figure.place(position, player.heading)
+      figure.animate(Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE, dt)
+      follow(position, player.heading)
+
+      renderer.render(mazeScene.scene, camera)
+    })
 
     return () => {
       observer.disconnect()
       renderer.setAnimationLoop(null)
+      controls.dispose()
+      figure.dispose()
       mazeScene.dispose()
       renderer.dispose()
       renderer.domElement.remove()
@@ -48,12 +74,4 @@ export default function GameCanvas({ game }) {
   }, [game])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-}
-
-// 俯瞰鏡頭:從迷宮南方的高處斜看,整張迷宮都在畫面裡
-function createOverviewCamera(mazeWidth) {
-  const camera = new PerspectiveCamera(50, 1, 0.1, mazeWidth * 10)
-  camera.position.set(0, mazeWidth * 1.3, mazeWidth * 0.75)
-  camera.lookAt(0, 0, 0)
-  return camera
 }
