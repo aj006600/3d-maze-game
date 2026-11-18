@@ -8,8 +8,6 @@ export { WALL_THICKNESS } from './movement.js'
 
 const MAZE_SIZE = 10
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-// A 到 Z 各要放進一個不同的死路
-const MIN_DEAD_ENDS = LETTERS.length
 // 主角跑步的速度,單位是每秒幾格
 const RUN_SPEED = 1.25
 
@@ -28,7 +26,8 @@ const RUN_SPEED = 1.25
  * - `start`:起點的格子 `{ col, row }`,是迷宮中央四格之一。
  * - `door`:門的位置 `{ col, row, side }`,也就是 `(col, row)` 這一格朝 `side` 那一側的外牆。
  * - `letters`:A 到 Z 各一個字母所在的格子 `{ letter, col, row }`,依字母順序排列。
- *   每個字母在不同的死路裡,多出來的死路沒有字母。字母被收集後仍留在原地,所以這份配置整局不變。
+ *   每個字母在不同的死路裡,起點與門所在的格子不放字母,多出來的死路也沒有字母。
+ *   字母被收集後仍留在原地,所以這份配置整局不變。
  * - `player`:主角當下的 `{ x, y, heading }`。每次讀取都是一份新的快照,之後的推進不會改到它。
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
@@ -37,10 +36,7 @@ const RUN_SPEED = 1.25
  */
 export function createGame(seed, { allowTeleport = false } = {}) {
   const random = createRandom(seed)
-  const maze = generateMazeWithEnoughDeadEnds(random)
-  const start = pickStart(random)
-  const door = pickDoor(random)
-  const letters = placeLetters(random, maze)
+  const { maze, start, door, letters } = generateLayout(random)
   const walls = wallsOf(maze)
   const player = { x: start.col + 0.5, y: start.row + 0.5, heading: 0 }
   return {
@@ -92,15 +88,26 @@ function pickDoor(random) {
   return random.pick(segments)
 }
 
-function placeLetters(random, maze) {
-  const deadEnds = random.shuffle(deadEndsOf(maze))
-  return [...LETTERS].map((letter, i) => ({ letter, ...deadEnds[i] }))
-}
-
-function generateMazeWithEnoughDeadEnds(random) {
-  // 死路不足時用同一個產生器接著再挖一張。產生器的數列由 seed 決定,所以重挖幾次、最後是哪一張都是固定的
+// 起點與門所在的格子不放字母:
+// - 起點放了字母的話,主角一開局就站在字母底下。
+// - 門打開後,門所在的那一格有兩個開口,就不再是死路。
+function generateLayout(random) {
+  // 能放字母的死路不足 26 個時,用同一個產生器接著重新產生一局。
+  // 產生器的數列由 seed 決定,所以重來幾次、最後是哪一局都是固定的
   for (;;) {
     const maze = generateMaze(MAZE_SIZE, random)
-    if (deadEndsOf(maze).length >= MIN_DEAD_ENDS) return maze
+    const start = pickStart(random)
+    const door = pickDoor(random)
+    const candidates = deadEndsOf(maze).filter((cell) => !isSameCell(cell, start) && !isSameCell(cell, door))
+    if (candidates.length >= LETTERS.length) return { maze, start, door, letters: placeLetters(random, candidates) }
   }
+}
+
+function placeLetters(random, candidates) {
+  const shuffled = random.shuffle(candidates)
+  return [...LETTERS].map((letter, i) => ({ letter, ...shuffled[i] }))
+}
+
+function isSameCell(a, b) {
+  return a.col === b.col && a.row === b.row
 }

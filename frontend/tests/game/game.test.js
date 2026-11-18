@@ -153,6 +153,20 @@ describe('createGame 的字母', () => {
     }
   })
 
+  it('起點那一格沒有字母', () => {
+    for (const seed of SEEDS) {
+      const { start, letters } = createGame(seed)
+      expect(letters.map(keyOf), `seed ${seed}`).not.toContain(keyOf(start))
+    }
+  })
+
+  it('門所在的那一格沒有字母', () => {
+    for (const seed of SEEDS) {
+      const { door, letters } = createGame(seed)
+      expect(letters.map(keyOf), `seed ${seed}`).not.toContain(keyOf(door))
+    }
+  })
+
   it('沒有兩個字母在同一格', () => {
     for (const seed of SEEDS) {
       const cells = new Set(createGame(seed).letters.map(keyOf))
