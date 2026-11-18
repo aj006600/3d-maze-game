@@ -11,7 +11,7 @@ make local-down  # 停止並清理 container 與 network
 
 乾淨 clone 不必先建任何檔案:`make local` 發現缺 `.env` 時會從 `.env.example` 複製一份。
 
-- 前端 → http://localhost:3000(頁面會顯示 backend 回傳的環境 `local`,證明接通了)
+- 前端 → http://localhost:3000(首頁就是遊戲畫面)
 - 後端 → http://localhost:8000/health
 
 兩個埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。
@@ -35,7 +35,7 @@ make local-down  # 停止並清理 container 與 network
 變數名與部署主機上 `.env.<env>` 的一致,程式不必為環境分支。
 新增變數:先加進 `.env.example`,再到自己的 `.env` 填值。
 
-本機的 `APP_ENV` 是 **`local`**,刻意與部署出去的 `dev` 環境區分——頁面顯示 `local` 就表示你看的是本機。
+本機的 `APP_ENV` 是 **`local`**,刻意與部署出去的 `dev` 環境區分——後端 `/api/message` 回傳的 `env` 是 `local`,就表示你連到的是本機。
 
 ## Hot reload 的範圍
 
@@ -70,7 +70,8 @@ make test-frontend ARGS="-t 死路"        # 只跑名字符合的測試
 有 build cache 時只多幾秒。
 
 `frontend/tests/` 鏡射 `frontend/src/` 的結構。遊戲核心(`frontend/src/game/`)的測試只透過它的公開介面
-`createGame` 給輸入、讀狀態,不測內部的部件。
+`createGame` 給輸入、讀狀態,不測內部的部件。渲染層(`frontend/src/render/`)沒有自動化測試,
+畫面的驗證是開實際頁面截圖、檢查 console 沒有錯誤。
 
 ### Testing workflow
 
