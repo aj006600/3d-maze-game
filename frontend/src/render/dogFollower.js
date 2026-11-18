@@ -49,7 +49,8 @@ const TURN_RATE = 10
 /**
  * 依主角走過的路線,每一幀決定狗的位置與朝向。
  *
- * 狗會避開這一局的牆。牆只在建立時讀一次,之後牆的變化不會反映在狗身上。
+ * 狗會避開這一局的牆。牆在建立時讀一次。牆變了之後(例如門打開)要呼叫 `refreshWalls()` 重新讀,
+ * 否則狗仍會被舊的牆擋住。
  *
  * 每一幀呼叫 `follow(playerPosition, playerHeading, dt)`:
  * - playerPosition 是主角在世界座標地面上的 `{ x, z }`。
@@ -62,7 +63,8 @@ const TURN_RATE = 10
  * 第一次呼叫、主角被傳送到別處,以及狗被牆卡住追不上時,狗會直接站到主角的右前方,那一幀的 distance 是 0。
  */
 export function createDogFollower(game) {
-  const walls = game.walls.map((wall) => footprintOf(game.maze, wall))
+  const readWalls = () => game.walls.map((wall) => footprintOf(game.maze, wall))
+  let walls = readWalls()
   // 主角走過的路線,最舊的點在前面
   let trail = []
   // 狗在路線的哪一側:1 是行進方向的右側,-1 是左側
@@ -159,6 +161,9 @@ export function createDogFollower(game) {
   }
 
   return {
+    refreshWalls() {
+      walls = readWalls()
+    },
     follow(player, playerHeading, dt) {
       const latest = trail.at(-1)
       if (!latest || distanceBetween(player, latest) > JUMP_DISTANCE) restart(player, playerHeading)

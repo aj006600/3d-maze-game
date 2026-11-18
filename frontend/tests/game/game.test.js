@@ -1,5 +1,5 @@
 // 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
-// 依通關字串收集字母,以及測試用的傳送 hook。
+// 依通關字串收集字母,開門與破關,以及測試用的傳送 hook。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -184,15 +184,15 @@ describe('createGame 的字母', () => {
   })
 })
 
-describe('createGame 的牆', () => {
-  // (col, row) 這一格朝 side 那一側的邊線中點,以格為單位
-  const sideMidpointOf = (cell, side) => ({
-    x: cell.col + 0.5 + OFFSETS[side].col / 2,
-    y: cell.row + 0.5 + OFFSETS[side].row / 2,
-  })
-  const isCovered = (walls, { x, y }) =>
-    walls.some((wall) => wall.minX <= x && x <= wall.maxX && wall.minY <= y && y <= wall.maxY)
+// (col, row) 這一格朝 side 那一側的邊線中點,以格為單位
+const sideMidpointOf = (cell, side) => ({
+  x: cell.col + 0.5 + OFFSETS[side].col / 2,
+  y: cell.row + 0.5 + OFFSETS[side].row / 2,
+})
+const isCovered = (walls, { x, y }) =>
+  walls.some((wall) => wall.minX <= x && x <= wall.maxX && wall.minY <= y && y <= wall.maxY)
 
+describe('createGame 的牆', () => {
   it('沒有通道的每一側都立著牆,外牆與鎖著的門也是;有通道的那一側沒有牆', () => {
     for (const seed of SEEDS) {
       const game = createGame(seed)
@@ -371,15 +371,6 @@ describe('主角與牆', () => {
     }
   })
 
-  it('門鎖著時等同於牆,走不出迷宮', () => {
-    for (const seed of SEEDS) {
-      const game = createGame(seed, { allowTeleport: true })
-      game.teleport(game.door)
-      run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1.5 / RUN_SPEED)
-      expect(cellOf(game.player), `seed ${seed}`).toEqual({ col: game.door.col, row: game.door.row })
-    }
-  })
-
   it('朝有通道的那一側跑,會跑進隔壁那一格', () => {
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
@@ -495,6 +486,69 @@ describe('收集', () => {
         expect(interactAt(game, letter), `seed ${seed} 第 ${i + 1} 個 ${letter}`).toBe('collected')
       }
       expect(game.progress, `seed ${seed}`).toBe(13)
+    }
+  })
+})
+
+// 依通關字串的順序,到前 count 個字母各互動一次
+function collectFirst(game, count) {
+  for (const letter of 'HAPPYBIRTHDAY'.slice(0, count)) interactAt(game, letter)
+}
+
+describe('門與破關', () => {
+  it('主角在門所在的那一格時算走到門前,其他格子都不算', () => {
+    for (const seed of SEEDS.slice(0, 5)) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const cell of cellsOf(game.maze)) {
+        game.teleport(cell)
+        expect(game.atDoor, `seed ${seed} ${keyOf(cell)}`).toBe(keyOf(cell) === keyOf(game.door))
+      }
+    }
+  })
+
+  it('進度未滿 13 時門鎖著,主角走不出去', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      collectFirst(game, 12)
+      game.teleport(game.door)
+      run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1.5 / RUN_SPEED)
+      expect(cellOf(game.player), `seed ${seed}`).toEqual({ col: game.door.col, row: game.door.row })
+    }
+  })
+
+  it('收集第 13 個字母的那一次互動,門就打開', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      collectFirst(game, 12)
+      expect(game.doorOpen, `seed ${seed} 收集第 13 個之前`).toBe(false)
+      interactAt(game, 'Y')
+      expect(game.doorOpen, `seed ${seed}`).toBe(true)
+    }
+  })
+
+  it('門打開後,主角跑出門的那一刻就破關,不需要按互動鍵', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      collectFirst(game, 13)
+      game.teleport(game.door)
+      // 從門所在那一格的中央往門跑,跑不到半格還在迷宮裡,再跑一格就出了門
+      run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 0.4 / RUN_SPEED)
+      expect(game.finished, `seed ${seed} 還沒走出門`).toBe(false)
+      run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1 / RUN_SPEED)
+      expect(cellOf(game.player), `seed ${seed}`).toEqual(stepOf(game.door, game.door.side))
+      expect(game.finished, `seed ${seed}`).toBe(true)
+    }
+  })
+
+  it('門打開後,walls 裡只少了門那一段牆', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      collectFirst(game, 13)
+      const { walls, door } = game
+      expect(isCovered(walls, sideMidpointOf(door, door.side)), `seed ${seed}`).toBe(false)
+      for (const wall of wallSidesOf(game)) {
+        expect(isCovered(walls, sideMidpointOf(wall, wall.side)), `seed ${seed} ${keyOf(wall)} ${wall.side}`).toBe(true)
+      }
     }
   })
 })

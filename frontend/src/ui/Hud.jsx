@@ -1,4 +1,5 @@
-// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、可互動時的「按 F」,以及按錯時的「不是這個」。
+// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」,
+// 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
 import Key from './Key.jsx'
 
@@ -18,6 +19,13 @@ const KEYFRAMES = `
   75% { opacity: 1; }
   100% { opacity: 0; transform: translateX(0); }
 }
+@keyframes hud-door-opened {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+  10% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  18% { transform: translateX(-50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
 `
 
 /**
@@ -27,8 +35,10 @@ const KEYFRAMES = `
  * - `progress` 是已收集的字母數:前 progress 個字母亮起,下一個閃爍。
  * - `canInteract` 為 true 時顯示「按 F」。
  * - `wrongCount` 每加一,「不是這個」就從頭播一次,播完自己消失。它是 0 時不顯示。
+ * - `atDoor` 為 true 且 `doorOpen` 為 false 時顯示「先收集完字母」。
+ * - `doorOpen` 從 false 變成 true 時,「門開了」播一次,播完自己消失。一開始就是 true 時也會播一次。
  */
-export default function Hud({ phrase, progress, canInteract, wrongCount }) {
+export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor, doorOpen }) {
   return (
     <div style={styles.overlay}>
       <style>{KEYFRAMES}</style>
@@ -43,6 +53,7 @@ export default function Hud({ phrase, progress, canInteract, wrongCount }) {
           </span>
         ))}
       </div>
+      {doorOpen && <div style={styles.doorOpened}>門開了</div>}
       <div style={styles.prompts}>
         {/* 換 key 會換一個新的元素,動畫才會從頭播,連續按錯時每一下都看得到 */}
         {wrongCount > 0 && (
@@ -51,10 +62,11 @@ export default function Hud({ phrase, progress, canInteract, wrongCount }) {
           </div>
         )}
         {canInteract && (
-          <div style={styles.interact}>
+          <div style={styles.hint}>
             按<Key>F</Key>
           </div>
         )}
+        {atDoor && !doorOpen && <div style={styles.hint}>先收集完字母</div>}
       </div>
     </div>
   )
@@ -72,7 +84,7 @@ function letterStyleOf(index, progress) {
   return styles.letter
 }
 
-// 通關字串與「按 F」共用的白色圓角底
+// 通關字串與下方提示共用的白色圓角底
 const panel = {
   borderRadius: 999,
   background: 'rgba(255, 253, 248, 0.92)',
@@ -127,7 +139,7 @@ const styles = {
     alignItems: 'center',
     gap: 12,
   },
-  interact: {
+  hint: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
@@ -135,6 +147,23 @@ const styles = {
     ...panel,
     fontSize: 20,
     fontWeight: 600,
+  },
+  // 放在通關字串的正下方,玩家看進度時就會看到它,也不會蓋住畫面中央偏下的主角
+  doorOpened: {
+    position: 'absolute',
+    top: 84,
+    left: '50%',
+    padding: '12px 32px',
+    borderRadius: 999,
+    background: '#e0577d',
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 800,
+    letterSpacing: 4,
+    whiteSpace: 'nowrap',
+    boxShadow: '0 6px 20px rgba(224, 87, 125, 0.4)',
+    opacity: 0,
+    animation: 'hud-door-opened 3s ease-out forwards',
   },
   wrong: {
     padding: '10px 24px',

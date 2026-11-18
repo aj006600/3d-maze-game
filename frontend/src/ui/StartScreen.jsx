@@ -2,6 +2,7 @@
 // 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上,也就不會意外鎖定游標。
 import { PHRASE } from '../config.js'
 import Key from './Key.jsx'
+import { backdrop, panel, primaryButton, title } from './screenStyles.js'
 
 const CONTROL_HINTS = [
   { keys: ['W', 'A', 'S', 'D'], action: 'W 前進、S 倒退、A 與 D 橫移' },
@@ -42,31 +43,9 @@ export default function StartScreen({ onStart }) {
 }
 
 const styles = {
-  backdrop: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    background: 'rgba(255, 244, 230, 0.55)',
-    backdropFilter: 'blur(4px)',
-  },
-  panel: {
-    width: '100%',
-    maxWidth: 440,
-    padding: '32px 32px 28px',
-    borderRadius: 24,
-    background: '#fffdf8',
-    boxShadow: '0 12px 40px rgba(120, 80, 40, 0.25)',
-    textAlign: 'center',
-  },
-  title: {
-    margin: 0,
-    fontSize: 36,
-    letterSpacing: 4,
-    color: '#e0577d',
-  },
+  backdrop,
+  panel,
+  title,
   goal: {
     margin: '12px 0 24px',
     lineHeight: 1.6,
@@ -91,17 +70,5 @@ const styles = {
     gap: 4,
     justifyContent: 'flex-end',
   },
-  startButton: {
-    padding: '12px 48px',
-    border: 'none',
-    borderRadius: 999,
-    background: '#e0577d',
-    color: '#fff',
-    fontFamily: 'inherit',
-    fontSize: 20,
-    fontWeight: 600,
-    letterSpacing: 4,
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #b83d61',
-  },
+  startButton: primaryButton,
 }

@@ -28,7 +28,7 @@ const RETURN_RATE = 5
  * - pitch 是往下看的角度,單位是弧度,必須在設定的上下限之間。
  * - dt 是距離上一幀經過幾秒,決定鏡頭在障礙消失後退回去的速度。
  *
- * 牆只在建立時讀一次,之後牆的變化不會反映在鏡頭上。
+ * 牆在建立時讀一次。牆變了之後(例如門打開)要呼叫 `refreshWalls()` 重新讀,否則鏡頭仍會避開舊的牆。
  * 設定的牆高沒有高過鏡頭能到達的最高點時會丟出錯誤。
  */
 export function createFollowCamera(game) {
@@ -41,11 +41,15 @@ export function createFollowCamera(game) {
 
   const camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, NEAR, 500)
   // 牆角擴成直角而不是圓角,只會讓鏡頭在牆角附近多拉近一點點
-  const obstacles = game.walls.map((wall) => footprintOf(game.maze, wall, CLEARANCE))
+  const readObstacles = () => game.walls.map((wall) => footprintOf(game.maze, wall, CLEARANCE))
+  let obstacles = readObstacles()
   let currentDistance = CAMERA.distance
 
   return {
     camera,
+    refreshWalls() {
+      obstacles = readObstacles()
+    },
     follow({ x, z }, heading, pitch, dt) {
       // 主角面向 (sin, -cos),鏡頭放在它的反方向
       const back = { x: -Math.sin(heading), z: Math.cos(heading) }

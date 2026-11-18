@@ -1,4 +1,4 @@
-// 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母。
+// 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母,收集完就能從門走出去破關。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
 import { PHRASE } from '../config.js'
 import { deadEndsOf, generateMaze } from './maze.js'
@@ -33,13 +33,17 @@ const RUN_SPEED = 1.25
  *   字母被收集後仍留在原地,所以這份配置整局不變。
  * - `phrase`:通關字串去掉空格後的字母,依收集的順序排列。
  * - `progress`:已收集的字母數,從 0 開始,收集完時等於 `phrase` 的長度。
+ * - `doorOpen`:門是不是打開了。收集完最後一個字母的那一次 `interact()` 就打開,之後不會再鎖上。
+ * - `atDoor`:主角所在的格子是不是門所在的那一格。只看位置,與門開了沒有無關。
+ * - `finished`:是不是已經破關。門打開後,主角跑出門、離開迷宮的那一步就破關,之後一直是 true。
  * - `canInteract`:主角所在的格子是不是放著字母的死路。只看位置,與進度無關。
  * - `interact()`:按下一次互動鍵,回傳這次互動的結果:
  *   - `'collected'`:主角所在的字母正是當下輪到的那一個,進度加一。字母留在原地,之後輪到時可以再收集。
  *   - `'wrong'`:主角所在的字母不是當下輪到的那一個,進度不變。全部收集完之後,每個字母都不是當下輪到的那一個。
  *   - `null`:主角不在有字母的死路格內,這次互動沒有任何效果。
  * - `walls`:擋住主角的每一段牆,各是一個 `{ minX, maxX, minY, maxY }` 的長方形,單位是格。
- *   外牆在裡面,門鎖著時也在裡面。每次讀取都是一份新的副本,改了它不會改到碰撞。
+ *   外牆在裡面。門鎖著時門那段外牆也在裡面,門打開後就不在了。
+ *   每次讀取都是一份新的副本,改了它不會改到碰撞,門打開後也要重新讀取。
  * - `player`:主角當下的 `{ x, y, heading }`。每次讀取都是一份新的快照,之後的推進不會改到它。
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
@@ -49,9 +53,11 @@ const RUN_SPEED = 1.25
 export function createGame(seed, { allowTeleport = false } = {}) {
   const random = createRandom(seed)
   const { maze, start, door, letters } = generateLayout(random)
-  const walls = wallsOf(maze)
+  let walls = wallsOf(maze)
   const player = { x: start.col + 0.5, y: start.row + 0.5, heading: 0 }
   let progress = 0
+  let doorOpen = false
+  let finished = false
   return {
     maze,
     start,
@@ -67,14 +73,27 @@ export function createGame(seed, { allowTeleport = false } = {}) {
     get progress() {
       return progress
     },
+    get doorOpen() {
+      return doorOpen
+    },
+    get finished() {
+      return finished
+    },
     get canInteract() {
       return letterAt(letters, player) !== undefined
+    },
+    get atDoor() {
+      return isSameCell(cellOf(player), door)
     },
     interact() {
       const placed = letterAt(letters, player)
       if (placed === undefined) return null
       if (placed.letter !== PHRASE_LETTERS[progress]) return 'wrong'
       progress += 1
+      if (progress === PHRASE_LETTERS.length) {
+        doorOpen = true
+        walls = wallsOf(maze, door)
+      }
       return 'collected'
     },
     step({ forward, right, heading, dt }) {
@@ -88,6 +107,8 @@ export function createGame(seed, { allowTeleport = false } = {}) {
       const dx = ((sin * forward + cos * right) / length) * distance
       const dy = ((-cos * forward + sin * right) / length) * distance
       Object.assign(player, moveAgainstWalls(walls, player, dx, dy))
+      // 門是外牆上唯一能打開的缺口,所以主角離開迷宮的格子,就是從打開的門走出去了
+      if (!isInside(maze, player)) finished = true
     },
     teleport({ col, row }) {
       if (!allowTeleport) throw new Error('teleport is disabled; create the game with { allowTeleport: true }')
@@ -139,9 +160,17 @@ function placeLetters(random, candidates) {
 }
 
 // 字母都在死路裡,所以主角所在的格子有字母,就等於主角站在有字母的死路裡
-function letterAt(letters, { x, y }) {
-  const cell = { col: Math.floor(x), row: Math.floor(y) }
+function letterAt(letters, position) {
+  const cell = cellOf(position)
   return letters.find((placed) => isSameCell(placed, cell))
+}
+
+function cellOf({ x, y }) {
+  return { col: Math.floor(x), row: Math.floor(y) }
+}
+
+function isInside(maze, { x, y }) {
+  return x >= 0 && x < maze.size && y >= 0 && y < maze.size
 }
 
 function isSameCell(a, b) {

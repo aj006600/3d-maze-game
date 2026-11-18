@@ -14,16 +14,19 @@ const HALF_THICKNESS = WALL_THICKNESS / 2
 /**
  * 列出迷宮裡每一段牆佔據的長方形 `{ minX, maxX, minY, maxY }`。
  *
- * 沒有通道的每一側都是牆,外牆也是。門鎖著時等同於牆,所以門所在的那段外牆也在裡面。
+ * 沒有通道的每一側都是牆,外牆也是。
+ * openDoor 是打開的門 `{ col, row, side }`,門所在的那段外牆不算牆。門鎖著時不給 openDoor,那段外牆就算牆。
  * 每段牆的長度多出一個牆厚,相鄰兩段在轉角處互相疊住,轉角不會留下縫隙。
  */
-export function wallsOf(maze) {
+export function wallsOf(maze, openDoor) {
+  const isOpenDoor = (col, row, side) =>
+    openDoor !== undefined && openDoor.col === col && openDoor.row === row && openDoor.side === side
   const walls = []
   for (let row = 0; row < maze.size; row += 1) {
     for (let col = 0; col < maze.size; col += 1) {
       const openings = maze.openings({ col, row })
       for (const side of SIDES) {
-        if (!openings.includes(side)) walls.push(wallRectOf(col, row, side))
+        if (!openings.includes(side) && !isOpenDoor(col, row, side)) walls.push(wallRectOf(col, row, side))
       }
     }
   }
