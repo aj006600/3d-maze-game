@@ -1,24 +1,16 @@
-import { useEffect, useState } from 'react'
+// 首頁就是遊戲畫面。
+import { useState } from 'react'
+
+import { SEED } from './config.js'
+import { createGame } from './game/game.js'
+import GameCanvas from './render/GameCanvas.jsx'
 
 export default function App() {
-  const [info, setInfo] = useState({ message: 'loading...', env: '' })
-
-  useEffect(() => {
-    fetch('/api/message')
-      .then((res) => res.json())
-      .then((data) => setInfo(data))
-      .catch(() => setInfo({ message: 'failed to reach backend', env: '' }))
-  }, [])
+  const [game] = useState(() => createGame(SEED))
 
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
-      <h1>3D Maze Game</h1>
-      <p>
-        Backend says: <strong>{info.message}</strong>
-      </p>
-      <p>
-        Environment: <strong>{info.env || '—'}</strong>
-      </p>
+    <main style={{ position: 'fixed', inset: 0 }}>
+      <GameCanvas game={game} />
     </main>
   )
 }

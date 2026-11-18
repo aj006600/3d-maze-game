@@ -1,6 +1,6 @@
 # 3d-maze-game
 
-3D 迷宮遊戲。React(Vite) 前端 + FastAPI 後端,以 docker compose 編排,
+3D 迷宮遊戲。React(Vite)+ Three.js 前端 + FastAPI 後端,以 docker compose 編排,
 多環境(dev / qas / prd)部署,GitHub Actions 遵循 trunk-based +「build 一次、依序 promote」。
 
 > 核心原則(12-factor):**一份程式碼、一組 image、設定隨環境變**。設定契約一律是環境變數:
@@ -34,8 +34,11 @@ make help           # 其餘指令
 │   ├── app/logging_setup.py # log 格式與層級(LOG_LEVEL)
 │   └── tests/ · pyproject.toml · uv.lock · Dockerfile
 ├── frontend/               # React + Vite(多階段:dev 含 Vitest、build 出靜態檔、nginx 出貨)
-│   ├── src/App.jsx · nginx.conf(供靜態檔 + 反向代理 /api)
+│   ├── src/App.jsx         # 首頁就是遊戲畫面
+│   ├── src/config.js       # 決定玩到哪一局的設定(seed)
 │   ├── src/game/           # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
+│   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,不持有規則
+│   ├── nginx.conf          # 供靜態檔 + 反向代理 /api
 │   ├── tests/              # Vitest,鏡射 src/ 的結構
 │   └── package.json · package-lock.json · Dockerfile
 ├── compose.yaml            # base:只定義服務與內部接線
