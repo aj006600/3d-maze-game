@@ -13,10 +13,13 @@ import {
   Scene,
 } from 'three'
 
-// 一格在世界座標裡的邊長
-const CELL_SIZE = 4
+import { WALL_THICKNESS as WALL_THICKNESS_IN_CELLS } from '../game/game.js'
+
+/** 一格在世界座標裡的邊長。 */
+export const CELL_SIZE = 4
 const WALL_HEIGHT = 4
-const WALL_THICKNESS = 0.6
+// 牆厚跟著遊戲核心的碰撞走,畫面上的牆才會與擋住主角的位置一致
+const WALL_THICKNESS = WALL_THICKNESS_IN_CELLS * CELL_SIZE
 const DOOR_HEIGHT = 3.2
 
 const SKY_COLOR = '#a8dcff'
@@ -36,7 +39,7 @@ const OFFSETS = {
 /**
  * 從一局遊戲建立迷宮場景。
  *
- * 回傳的 `width` 是迷宮在世界座標裡的邊長,迷宮的正中央在原點。
+ * 迷宮的正中央在世界座標的原點,遊戲核心的座標用 `toWorld` 換算。
  * 場景只反映建立當下的狀態,之後狀態改變不會自動更新。
  * 用完必須呼叫 `dispose()` 釋放 geometry 與 material;renderer 由呼叫端自己釋放。
  */
@@ -100,7 +103,6 @@ export function createMazeScene(game) {
 
   return {
     scene,
-    width,
     dispose() {
       for (const resource of resources) resource.dispose()
     },
@@ -136,13 +138,15 @@ function hedgeMatrixOf(maze, segment, bottom) {
     .setPosition(center.x, (bottom + WALL_HEIGHT) / 2, center.z)
 }
 
+/** 把遊戲核心以格為單位的平面座標 `{ x, y }` 換算成世界座標地面上的 `{ x, z }`。 */
+export function toWorld(maze, { x, y }) {
+  const half = (maze.size * CELL_SIZE) / 2
+  return { x: x * CELL_SIZE - half, z: y * CELL_SIZE - half }
+}
+
 // (col, row) 這一格朝 side 那一側的邊線中點,在世界座標的地面上
 function sideCenterOf(maze, { col, row, side }) {
-  const half = (maze.size * CELL_SIZE) / 2
-  return {
-    x: (col + 0.5) * CELL_SIZE - half + (OFFSETS[side].x * CELL_SIZE) / 2,
-    z: (row + 0.5) * CELL_SIZE - half + (OFFSETS[side].z * CELL_SIZE) / 2,
-  }
+  return toWorld(maze, { x: col + 0.5 + OFFSETS[side].x / 2, y: row + 0.5 + OFFSETS[side].z / 2 })
 }
 
 // 長方體的長邊預設沿著 x 軸,也就是東西向;東西兩側的牆是南北向,要轉九十度

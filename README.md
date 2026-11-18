@@ -37,7 +37,7 @@ make help           # 其餘指令
 │   ├── src/App.jsx         # 首頁就是遊戲畫面
 │   ├── src/config.js       # 決定玩到哪一局的設定(seed)
 │   ├── src/game/           # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
-│   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,不持有規則
+│   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭與鍵鼠輸入,不持有規則
 │   ├── nginx.conf          # 供靜態檔 + 反向代理 /api
 │   ├── tests/              # Vitest,鏡射 src/ 的結構
 │   └── package.json · package-lock.json · Dockerfile

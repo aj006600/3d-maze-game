@@ -2,14 +2,15 @@
 // 用 growing tree 演算法、每一步隨機挑一個進行中的格子往外挖;這樣挖出來的死路比例高,
 // 才放得下 A 到 Z 各一個字母。
 
-// 方向的契約:row 往南遞增,col 往東遞增
-const OFFSETS = {
+/** 往每一側走一格時 col 與 row 的變化。方向的契約:row 往南遞增,col 往東遞增。 */
+export const OFFSETS = {
   north: { col: 0, row: -1 },
   east: { col: 1, row: 0 },
   south: { col: 0, row: 1 },
   west: { col: -1, row: 0 },
 }
-const SIDES = Object.keys(OFFSETS)
+/** 一格的四側。 */
+export const SIDES = Object.keys(OFFSETS)
 const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
 
 /**

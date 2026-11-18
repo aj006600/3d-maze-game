@@ -1,4 +1,4 @@
-// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點與門。
+// 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點與門,主角的移動與碰撞,以及測試用的傳送 hook。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -133,3 +133,210 @@ describe('createGame 的門', () => {
     expect(sides).toEqual(new Set(Object.keys(OFFSETS)))
   })
 })
+
+// 主角所在的格子:x 往東、y 往南,以格為單位,格子 (col, row) 涵蓋 col ≤ x < col + 1
+const cellOf = (player) => ({ col: Math.floor(player.x), row: Math.floor(player.y) })
+
+// 朝向的契約:弧度,0 朝北,從上方俯瞰時順時針增加
+const HEADINGS = { north: 0, east: Math.PI / 2, south: Math.PI, west: (3 * Math.PI) / 2 }
+
+const FRAME = 1 / 60
+
+// 以每個時間步 dt 推進 seconds 秒,每一步都給同樣的輸入;沒給的欄位是朝北站著不動
+function run(game, input, seconds, dt = FRAME) {
+  const frames = Math.round(seconds / dt)
+  for (let i = 0; i < frames; i += 1) game.step({ forward: 0, right: 0, heading: 0, ...input, dt })
+}
+
+// 從 before 到 after 移動的距離與單位方向
+function movementOf(before, after) {
+  const x = after.x - before.x
+  const y = after.y - before.y
+  const distance = Math.hypot(x, y)
+  return { distance, direction: { col: x / distance, row: y / distance } }
+}
+
+// 從起點格的中央以每個時間步 dt 跑 seconds 秒,回傳跑了多遠。時間要短到碰不到牆
+function distanceRun(input, seconds, dt = FRAME) {
+  const game = createGame(1)
+  const before = game.player
+  run(game, input, seconds, dt)
+  return movementOf(before, game.player).distance
+}
+
+// 主角每秒跑幾格。測試跑多久由它換算,不綁死在某個速度數值上
+const RUN_SPEED = distanceRun({ forward: 1 }, 0.1) / 0.1
+
+describe('主角', () => {
+  it('從起點出發', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed)
+      expect(cellOf(game.player), `seed ${seed}`).toEqual(game.start)
+    }
+  })
+
+  it('前進時朝著朝向跑', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed)
+      const side = game.maze.openings(game.start)[0]
+      const before = game.player
+      run(game, { forward: 1, heading: HEADINGS[side] }, 0.2)
+      const { direction } = movementOf(before, game.player)
+      expect(direction.col, `seed ${seed}`).toBeCloseTo(OFFSETS[side].col)
+      expect(direction.row, `seed ${seed}`).toBeCloseTo(OFFSETS[side].row)
+    }
+  })
+
+  it('倒退與橫移的方向以朝向為準', () => {
+    // 面向 facing 時,每一種輸入應該跑向哪一側
+    const expected = {
+      north: { back: 'south', right: 'east', left: 'west' },
+      east: { back: 'west', right: 'south', left: 'north' },
+      south: { back: 'north', right: 'west', left: 'east' },
+      west: { back: 'east', right: 'north', left: 'south' },
+    }
+    const inputs = { back: { forward: -1 }, right: { right: 1 }, left: { right: -1 } }
+    for (const [facing, sides] of Object.entries(expected)) {
+      for (const [name, input] of Object.entries(inputs)) {
+        const game = createGame(1)
+        const before = game.player
+        // 從格子中央只跑一小段,不論往哪個方向都還碰不到牆
+        run(game, { ...input, heading: HEADINGS[facing] }, 0.1)
+        const { direction } = movementOf(before, game.player)
+        const side = sides[name]
+        expect(direction.col, `${facing} ${name}`).toBeCloseTo(OFFSETS[side].col)
+        expect(direction.row, `${facing} ${name}`).toBeCloseTo(OFFSETS[side].row)
+      }
+    }
+  })
+
+  it('以固定速度跑', () => {
+    expect(distanceRun({ forward: 1 }, 0.2) / 0.2, '跑兩倍的時間').toBeCloseTo(RUN_SPEED)
+    expect(distanceRun({ forward: 1 }, 0.2, 0.2) / 0.2, '一個長的時間步').toBeCloseTo(RUN_SPEED)
+    expect(distanceRun({ forward: 1, right: 1 }, 0.1) / 0.1, '斜向').toBeCloseTo(RUN_SPEED)
+    expect(distanceRun({ forward: -1, right: -1 }, 0.1) / 0.1, '斜向倒退').toBeCloseTo(RUN_SPEED)
+    expect(distanceRun({ forward: 0.3 }, 0.1) / 0.1, '輸入小於 1').toBeCloseTo(RUN_SPEED)
+  })
+
+  it('移動的輸入歸零就立刻停下,沒有慣性', () => {
+    const game = createGame(1)
+    run(game, { forward: 1, right: 1 }, 0.1)
+    const running = game.player
+    game.step({ forward: 0, right: 0, heading: 0, dt: FRAME })
+    expect(game.player).toEqual(running)
+  })
+
+  it('朝向是最後一次輸入的朝向,站著不動時也一樣', () => {
+    const game = createGame(1)
+    run(game, { forward: 1, heading: 1.2 }, 0.1)
+    expect(game.player.heading).toBe(1.2)
+    game.step({ forward: 0, right: 0, heading: -2.5, dt: FRAME })
+    expect(game.player.heading).toBe(-2.5)
+  })
+})
+
+// 迷宮裡所有的牆,以「哪一格的哪一側」表示;門所在的那段外牆另外測,不列在這裡
+function wallSidesOf({ maze, door }) {
+  return cellsOf(maze).flatMap((cell) =>
+    Object.keys(OFFSETS)
+      .filter((side) => !maze.openings(cell).includes(side))
+      .filter((side) => !(keyOf(cell) === keyOf(door) && side === door.side))
+      .map((side) => ({ ...cell, side })),
+  )
+}
+
+describe('主角與牆', () => {
+  const COLLISION_SEEDS = SEEDS.slice(0, 5)
+
+  it('朝牆跑時被擋住,不會穿牆', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const wall of wallSidesOf(game)) {
+        game.teleport(wall)
+        // 跑一格半的距離,沒有被擋住的話一定會離開這一格
+        run(game, { forward: 1, heading: HEADINGS[wall.side] }, 1.5 / RUN_SPEED)
+        expect(cellOf(game.player), `seed ${seed} ${keyOf(wall)} ${wall.side}`).toEqual({
+          col: wall.col,
+          row: wall.row,
+        })
+      }
+    }
+  })
+
+  it('一個時間步跑得再遠也不會穿牆', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const wall of wallSidesOf(game)) {
+        game.teleport(wall)
+        game.step({ forward: 1, right: 0, heading: HEADINGS[wall.side], dt: 3 / RUN_SPEED })
+        expect(cellOf(game.player), `seed ${seed} ${keyOf(wall)} ${wall.side}`).toEqual({
+          col: wall.col,
+          row: wall.row,
+        })
+      }
+    }
+  })
+
+  it('斜向撞牆時沿著牆滑動,不會整個卡住', () => {
+    // 從上方俯瞰,順時針轉九十度的那一側;面向牆時往右斜跑,就是往這一側滑
+    const CLOCKWISE = { north: 'east', east: 'south', south: 'west', west: 'north' }
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const wall of wallSidesOf(game)) {
+        game.teleport(wall)
+        run(game, { forward: 1, heading: HEADINGS[wall.side] }, 1 / RUN_SPEED)
+        const againstWall = game.player
+        // 往右前方斜跑一小段,沿牆方向的位移短到碰不到隔壁那一側的牆
+        run(game, { forward: 1, heading: HEADINGS[wall.side] + Math.PI / 4 }, 0.2 / RUN_SPEED)
+        const moved = { col: game.player.x - againstWall.x, row: game.player.y - againstWall.y }
+        const normal = OFFSETS[wall.side]
+        const along = OFFSETS[CLOCKWISE[wall.side]]
+        const label = `seed ${seed} ${keyOf(wall)} ${wall.side}`
+        expect(moved.col * along.col + moved.row * along.row, label).toBeGreaterThan(0.1)
+        expect(moved.col * normal.col + moved.row * normal.row, label).toBeCloseTo(0)
+      }
+    }
+  })
+
+  it('門鎖著時等同於牆,走不出迷宮', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      game.teleport(game.door)
+      run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1.5 / RUN_SPEED)
+      expect(cellOf(game.player), `seed ${seed}`).toEqual({ col: game.door.col, row: game.door.row })
+    }
+  })
+
+  it('朝有通道的那一側跑,會跑進隔壁那一格', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (const cell of cellsOf(game.maze)) {
+        for (const side of game.maze.openings(cell)) {
+          game.teleport(cell)
+          // 從格子中央跑一格的距離,停在隔壁那一格的中央
+          run(game, { forward: 1, heading: HEADINGS[side] }, 1 / RUN_SPEED)
+          expect(cellOf(game.player), `seed ${seed} ${keyOf(cell)} ${side}`).toEqual(stepOf(cell, side))
+        }
+      }
+    }
+  })
+})
+
+describe('傳送 hook', () => {
+  it('明確開啟後,可以把主角移到任何一格', () => {
+    const game = createGame(1, { allowTeleport: true })
+    for (const cell of cellsOf(game.maze)) {
+      game.teleport(cell)
+      expect(cellOf(game.player)).toEqual(cell)
+    }
+  })
+
+  it('預設關閉:沒有明確開啟就呼叫會丟出錯誤,主角留在原地', () => {
+    const game = createGame(1)
+    const before = game.player
+    const elsewhere = cellsOf(game.maze).find((cell) => keyOf(cell) !== keyOf(game.start))
+    expect(() => game.teleport(elsewhere)).toThrow()
+    expect(game.player).toEqual(before)
+  })
+})
+
