@@ -26,7 +26,15 @@ jobs:
       - run: docker run --rm backend-test ruff format --check .
       - run: docker run --rm backend-test pytest -q
 
-  # 前端只驗 build 得過
+  # 跑在 frontend dev stage 容器裡,與本機 make test-frontend 同一套環境
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target dev -t frontend-test frontend
+      - run: docker run --rm frontend-test npm test
+
+  # 出貨的 nginx stage 只驗 build 得過
   test-frontend-build:
     runs-on: ubuntu-latest
     steps:
@@ -36,7 +44,7 @@ jobs:
   # 只有 Release 會產生 image;不指定 target,Docker 建最後一個 stage(runtime)。
   # 同時 build amd64 與 arm64:arm64 那半在 amd64 runner 上用 QEMU 模擬,慢幾分鐘,只在 Release 時付
   build:
-    needs: [test-backend, test-frontend-build]
+    needs: [test-backend, test-frontend, test-frontend-build]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:

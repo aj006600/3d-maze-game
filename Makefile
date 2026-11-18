@@ -30,7 +30,7 @@ guard = @test -n "$(filter $(ENV),$(ENVS))" || { echo "ENV=$(ENV) 無效。可�
 # TAG 不給預設值:要拉哪個 Release 得寫出來
 guard-tag = @test -n "$(TAG)" || { echo "TAG 必填。例:make deploy ENV=$(ENV) TAG=v1.2.0"; exit 1; }
 
-.PHONY: help local local-down compose test lint format deploy down ps clean worktree worktree-rm
+.PHONY: help local local-down compose test test-frontend lint format deploy down ps clean worktree worktree-rm
 
 help:
 	@echo "Local(在你的開發機上)"
@@ -38,6 +38,7 @@ help:
 	@echo "  make local-down                   停止並清理 make local 的 container 與 network"
 	@echo "  make compose ARGS=\"...\"           對 make local 那組 container 下任何 compose 子命令(logs -f backend、exec backend sh …)"
 	@echo "  make test [ARGS=\"...\"]           pytest,跑在 backend dev stage 容器裡(與 CI 同一套環境);ARGS 只跑一部分,例 ARGS=\"tests/test_main.py\" 或 ARGS=\"-k health\""
+	@echo "  make test-frontend [ARGS=\"...\"]  vitest,跑在 frontend dev stage 容器裡(與 CI 同一套環境);ARGS 只跑一部分,例 ARGS=\"tests/game\" 或 ARGS=\"-t 死路\""
 	@echo "  make lint | format                ruff check / ruff format(就地改檔)"
 	@echo "  make clean                        回收本專案的 container / volume / network、image 與 build cache"
 	@echo ""
@@ -83,6 +84,15 @@ RUNDEV = TAG=$(LOCAL_TAG) docker compose $(LOCAL) run --build --rm \
 # ARGS 原樣交給 pytest:開發中只跑跟改動相關的那幾個,完整套交給 CI(docs/development.md 的 Testing workflow)
 test:
 	$(RUNDEV) pytest $(ARGS)
+
+# 與 CI test-frontend 同一個 frontend dev stage。不經 compose:前端測試不讀 .env,也不需要 backend。
+# 每次都 build:原始碼與 package-lock.json 都烤在 image 裡,不重建會跑到舊程式碼。
+# tag 帶 LOCAL_TAG 的理由與上面相同,image 也帶專案 label,make clean 清得到
+FRONTEND_DEV_IMAGE := $(APP_NAME)-frontend-dev:$(LOCAL_TAG)
+
+test-frontend:
+	docker build --target dev -t $(FRONTEND_DEV_IMAGE) frontend
+	docker run --rm $(FRONTEND_DEV_IMAGE) npm test -- $(ARGS)
 
 lint:
 	$(RUNDEV) ruff check .
