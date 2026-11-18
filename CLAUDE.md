@@ -5,7 +5,8 @@
 | 指令 | 用途 |
 |---|---|
 | `make local` / `make local-down` | 起本機環境(hot reload,localhost:3000 / :8000;撞埠時從 shell 換 `PORT` / `FRONTEND_PORT`)/ 停止並清理 |
-| `make test`(只跑一部分:`make test ARGS="tests/test_main.py"`) | 跑測試,在 backend 的 dev stage 容器裡(與 CI 同一顆 image) |
+| `make test`(只跑一部分:`make test ARGS="tests/test_main.py"`) | 跑後端測試(pytest),在 backend 的 dev stage 容器裡(與 CI 同一顆 image) |
+| `make test-frontend`(只跑一部分:`make test-frontend ARGS="tests/game"`) | 跑前端測試(Vitest),在 frontend 的 dev stage 容器裡(與 CI 同一個 stage) |
 | `make lint` / `make format` | lint / format(ruff) |
 | `make worktree ISSUE=<n> BRANCH=<feat/slug>` / `make worktree-rm ISSUE=<n>` | 開 / 收一個 issue 的 worktree(從主 checkout 跑,流程見 Development workflow) |
 | `make compose ARGS="..."` | 對 `make local` 那組 container 下 compose 子命令(`logs -f backend`、`exec backend sh`)。它帶著與 `make local` 同一組 `-f` 與 image tag;直接打 `docker compose` 會 build 出另一顆 image |

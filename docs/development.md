@@ -57,6 +57,21 @@ make format                           # ruff format(就地改檔)
 
 都跑在 backend 的 dev stage 容器裡,跟 CI 的 `test-backend` job 同一顆 image——本機過了 CI 就會過。
 
+前端的測試另有一個指令,`make test` 不會跑到它:
+
+```bash
+make test-frontend                       # 完整套 Vitest,跟 CI 一樣
+make test-frontend ARGS="tests/game"     # 只跑路徑符合的測試檔
+make test-frontend ARGS="-t 死路"        # 只跑名字符合的測試
+```
+
+跑在 frontend 的 dev stage 容器裡,跟 CI 的 `test-frontend` job 用同一個 stage。這個 stage 不經過 compose,
+不讀 `.env`、也不需要 backend。原始碼與 `package-lock.json` 都烤在 image 裡,所以每次都會先重新 build,
+有 build cache 時只多幾秒。
+
+`frontend/tests/` 鏡射 `frontend/src/` 的結構。遊戲核心(`frontend/src/game/`)的測試只透過它的公開介面
+`createGame` 給輸入、讀狀態,不測內部的部件。
+
 ### Testing workflow
 
 本機跑一次、CI 再跑一次是刻意的,兩次回答的問題不同:本機答「我剛改的有沒有弄壞」,
@@ -64,11 +79,12 @@ CI 在乾淨的機器上對**合併後的結果**跑完整套,答「合進 main 
 能省的是本機那次的**範圍**:
 
 1. **開發中**只跑跟改動相關的測試,幾秒一輪。`tests/` 鏡射 `app/` 的結構,改 `app/x.py` 就跑
-   `make test ARGS="tests/test_x.py"`;修一個紅的測試就 `ARGS="-k <測試名>"`。
+   `make test ARGS="tests/test_x.py"`;修一個紅的測試就 `ARGS="-k <測試名>"`。前端同理,
+   改 `src/game/x.js` 就跑 `make test-frontend ARGS="tests/game"`。
 2. **commit 前**跑 `make lint`,幾秒。
 3. **push、開 PR**,CI 跑完整套,不用等它,繼續做別的;紅了再回來修。
 
-只有改到共用的東西(相依、設定、conftest / 共用 fixture、跨多個模組)或不確定影響範圍時,才在 push 前跑一次完整的 `make test`。
+只有改到共用的東西(相依、設定、conftest / 共用 fixture、跨多個模組)或不確定影響範圍時,才在 push 前跑一次完整的 `make test`(前端是 `make test-frontend`)。
 
 ## 常用檢查
 
