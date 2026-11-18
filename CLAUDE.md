@@ -44,3 +44,17 @@ PR 有 conflict 時自行 `git rebase origin/main` 再 force-push 自己的 feat
 - **規則提議**:同類糾正或卡關**第二次**發生(或一次但代價高:不可逆操作、部署事故級),主動提議把教訓寫進來——先展示擬新增的那一行與觸發原因,我同意才寫。歸位優先序:能用工具強制的進工具/CI → 綁定單檔的進該檔註釋 → 概念進 `docs/` → 決策進 `docs/adr/` → 都不是且每個 session 都適用,才進 CLAUDE.md。
 - **測試品質**(pytest 範例,依測試框架調整):單元測試目錄鏡射原始碼模組結構;fixture 先用 conftest 既有的,重複自建即違規;測試名稱與 docstring 必須與實際行為一致;每個測試驗證一個真實行為——斷言偶然字串(使用者可見的契約訊息除外)、恆真斷言、與既有測試重複覆蓋的,一律刪除。
 - **技術調研**:用到不熟悉或版本敏感的 API/框架時,**先查證再寫**——context7 查 library 文檔、WebSearch/WebFetch 查一手來源、`gh search` 找官方範例與成熟專案;大題目啟用 `/research`(背景 agent、只認一手來源、產出帶引用的 Markdown 進 repo)。外部資訊一律**驗證(實測或對照官方文檔)後才採用**。
+
+## Agent skills
+
+### Issue tracker
+
+Issue 與 spec 放在本 repo 的 GitHub Issues,一律用 `gh` CLI 操作。詳見 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用預設的五個角色 label:`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。詳見 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+Single-context:根目錄一份 `GLOSSARY.md` 加 `docs/adr/`。詳見 `docs/agents/domain.md`。

@@ -42,5 +42,5 @@ make help     # 其餘指令
 ├── Makefile                # local·compose / test·lint·format / clean / deploy·down / ps / worktree
 ├── CLAUDE.md · .claude/    # coding agent 的規則與 guard hooks
 ├── .github/workflows/ci-cd.yml  # test → Release tag(vX.Y.Z)才 build 推 GHCR
-└── docs/                   # development.md · deployment.md
+└── docs/                   # development.md · deployment.md · agents/(agent skills 的 issue tracker / label / domain 設定)
 ```
