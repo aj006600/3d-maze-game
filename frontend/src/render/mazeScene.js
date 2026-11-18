@@ -145,6 +145,17 @@ export function toWorld(maze, { x, y }) {
   return { x: x * CELL_SIZE - half, z: y * CELL_SIZE - half }
 }
 
+/**
+ * 遊戲核心的一段牆在世界座標地面上佔據的長方形 `{ minX, maxX, minZ, maxZ }`。
+ *
+ * wall 是遊戲核心 `walls` 裡的一段牆。margin 大於 0 時,長方形的四邊各往外擴 margin,牆角擴成直角而不是圓角。
+ */
+export function footprintOf(maze, { minX, maxX, minY, maxY }, margin = 0) {
+  const min = toWorld(maze, { x: minX, y: minY })
+  const max = toWorld(maze, { x: maxX, y: maxY })
+  return { minX: min.x - margin, maxX: max.x + margin, minZ: min.z - margin, maxZ: max.z + margin }
+}
+
 // (col, row) 這一格朝 side 那一側的邊線中點,在世界座標的地面上
 function sideCenterOf(maze, { col, row, side }) {
   return toWorld(maze, { x: col + 0.5 + OFFSETS[side].x / 2, y: row + 0.5 + OFFSETS[side].z / 2 })

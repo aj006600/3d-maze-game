@@ -1,16 +1,22 @@
 // 主角的狗:用長方體與角錐拼成的低多邊形造型,跑步動作由程式計算,不使用模型或動畫素材檔。
 // 這裡只負責外觀、擺放與動作;狗在哪裡、朝哪裡、移動了多遠,都由呼叫端告訴它。
-import { BoxGeometry, ConeGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
+import { BoxGeometry, ConeGeometry, Group, MeshStandardMaterial } from 'three'
 
-import { createRunCycle } from './runCycle.js'
+import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 
 const FUR_COLOR = '#d9954a'
 const CREAM_COLOR = '#f6e3c4'
 const DARK_COLOR = '#2b2420'
 const COLLAR_COLOR = '#3f8fd8'
 
-// 各部位的尺寸,單位與世界座標相同。狗的原點在身體正下方的地面上,臉朝 -z。
-// 鼻尖到尾巴尖都在原點 0.45 以內;跟隨的邏輯以這個半徑讓狗避開牆,改尺寸時兩邊要一起看
+/**
+ * 狗的整個身體都在原點這個距離以內,包括鼻尖、尾巴尖與擺動中的腳,單位與世界座標相同。
+ *
+ * 讓狗避開牆的邏輯以這個半徑為準,所以加大下面任何一個部位時都要確認身體仍在這個半徑內。
+ */
+export const DOG_RADIUS = 0.45
+
+// 各部位的尺寸,單位與世界座標相同。狗的原點在身體正下方的地面上,臉朝 -z
 const LEG = { width: 0.09, length: 0.3, spacingX: 0.08, frontZ: -0.16, backZ: 0.16 }
 const BODY = { width: 0.24, height: 0.24, length: 0.48 }
 const HEAD = { width: 0.22, height: 0.2, depth: 0.2, y: 0.64, z: -0.24 }
@@ -48,14 +54,7 @@ export function createDogFigure() {
     collar: new MeshStandardMaterial({ color: COLLAR_COLOR, roughness: 0.6 }),
   }
 
-  const part = (geometry, material, [width, height, depth], [x, y, z]) => {
-    const mesh = new Mesh(geometry, material)
-    mesh.scale.set(width, height, depth)
-    mesh.position.set(x, y, z)
-    return mesh
-  }
-
-  // 腿的原點在與身體相接的關節上,繞 x 軸轉就是前後擺動;腳掌是淺色的一截
+  // 腿的原點在與身體相接的關節上,繞 x 軸轉就是前後擺動
   const leg = (x, z) => {
     const joint = new Group()
     joint.position.set(x, LEG.length, z)
@@ -111,10 +110,8 @@ export function createDogFigure() {
 
   return {
     object,
-    place({ x, z }, heading) {
-      object.position.set(x, 0, z)
-      // 核心的朝向從上方俯瞰是順時針增加,Three.js 繞 y 軸是逆時針,所以取負號
-      object.rotation.y = -heading
+    place(position, heading) {
+      placeFigure(object, position, heading)
     },
     animate(distance, dt) {
       const { phase, blend } = runCycle.advance(distance, dt)

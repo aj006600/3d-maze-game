@@ -1,8 +1,8 @@
 // 主角的人:用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,不使用模型或動畫素材檔。
 // 這裡只負責外觀、擺放與動作;主角在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的狀態告訴它。
-import { BoxGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial } from 'three'
+import { BoxGeometry, Group, IcosahedronGeometry, MeshStandardMaterial } from 'three'
 
-import { createRunCycle } from './runCycle.js'
+import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 
 const SKIN_COLOR = '#f2c7a5'
 const HAIR_COLOR = '#4a2f1d'
@@ -44,13 +44,6 @@ export function createPlayerFigure() {
     shirt: new MeshStandardMaterial({ color: SHIRT_COLOR, roughness: 0.9 }),
     pants: new MeshStandardMaterial({ color: PANTS_COLOR, roughness: 0.9 }),
     shoe: new MeshStandardMaterial({ color: SHOE_COLOR, roughness: 0.9 }),
-  }
-
-  const part = (geometry, material, [width, height, depth], [x, y, z]) => {
-    const mesh = new Mesh(geometry, material)
-    mesh.scale.set(width, height, depth)
-    mesh.position.set(x, y, z)
-    return mesh
   }
 
   // 四肢的原點在關節上,繞 x 軸轉就是前後擺動
@@ -96,10 +89,8 @@ export function createPlayerFigure() {
 
   return {
     object,
-    place({ x, z }, heading) {
-      object.position.set(x, 0, z)
-      // 人的臉朝 -z。核心的朝向從上方俯瞰是順時針增加,Three.js 繞 y 軸是逆時針,所以取負號
-      object.rotation.y = -heading
+    place(position, heading) {
+      placeFigure(object, position, heading)
     },
     animate(distance, dt) {
       const { phase, blend } = runCycle.advance(distance, dt)
