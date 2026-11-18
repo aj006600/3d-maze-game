@@ -37,7 +37,7 @@ make help           # 其餘指令
 │   ├── src/App.jsx         # 首頁就是遊戲:把介面層疊在畫布上,並決定目前停在哪個畫面
 │   ├── src/config.js       # 試玩後要調整的設定:seed、通關字串、場景比例(牆高、走道寬度)、鏡頭距離與俯仰角
 │   ├── src/game/           # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
-│   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭與鍵鼠輸入,不持有規則
+│   ├── src/render/         # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭、鍵鼠輸入與跟著主角跑的狗,不持有規則
 │   ├── src/ui/             # 介面層:疊在畫布上的 React 畫面與提示,不持有規則
 │   ├── nginx.conf          # 供靜態檔 + 反向代理 /api
 │   ├── tests/              # Vitest,鏡射 src/ 的結構
