@@ -2,6 +2,7 @@
 // 這裡只負責外觀、擺放與動作;狗在哪裡、朝哪裡、移動了多遠,都由呼叫端告訴它。
 import { BoxGeometry, Group, IcosahedronGeometry, MeshStandardMaterial } from 'three'
 
+import { createFeedbackClip, hopOf } from './collectFeedback.js'
 import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 
 // 草地的綠色會從底下反光到狗身上,毛色要偏暖一點,在場景裡看起來才是奶油色而不是黃綠色
@@ -38,6 +39,10 @@ const LEG_SWING = 0.7
 const BOB_HEIGHT = 0.04
 const HEAD_NOD = 0.08
 
+// 收集成功時原地跳一下。從 from 起跳、to 落地,兩者都是整段回饋的幾分之幾;height 是跳起來的高度。
+// 跳在空中時前腳往前伸、後腳往後蹬,頭往上抬。腳伸出的角度比跑步時小,整個身體仍然落在 DOG_RADIUS 以內
+const HOP = { from: 0.1, to: 0.5, height: 0.18, legReach: 0.5, headLift: 0.25 }
+
 /**
  * 建立主角的狗,`object` 要由呼叫端加進場景。
  *
@@ -45,6 +50,9 @@ const HEAD_NOD = 0.08
  * - `place(position, heading)`:position 是世界座標地面上的 `{ x, z }`;heading 是狗的朝向,與遊戲核心的朝向同一個慣例。
  * - `animate(distance, dt)`:distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒。
  *   有在移動就播跑步動作並吐出舌頭,停下後很快回到站姿並保持靜止。
+ *
+ * 收集成功時呼叫 `hop()`:狗原地跳一下。還沒跳完時又呼叫,第二次會等第一次跳完再從頭跳。
+ * 動作由之後每一幀的 `animate` 推進。
  *
  * 用完必須呼叫 `dispose()` 釋放 geometry 與 material。
  */
@@ -121,23 +129,31 @@ export function createDogFigure() {
   object.add(torso)
 
   const runCycle = createRunCycle(STRIDE_LENGTH)
+  const hopClip = createFeedbackClip()
 
   return {
     object,
     place(position, heading) {
       placeFigure(object, position, heading)
     },
+    hop() {
+      hopClip.play()
+    },
     animate(distance, dt) {
       const { phase, blend } = runCycle.advance(distance, dt)
-      // 小跑步:左前腳與右後腳一起擺,右前腳與左後腳往反方向擺。繞 x 軸轉正的角度是腳往前(-z)踢
-      const swing = Math.sin(phase) * blend
-      frontLeft.rotation.x = swing * LEG_SWING
-      backRight.rotation.x = swing * LEG_SWING
-      frontRight.rotation.x = -swing * LEG_SWING
-      backLeft.rotation.x = -swing * LEG_SWING
+      const rise = hopOf(hopClip.advance(dt), HOP.from, HOP.to)
+      // 小跑步:左前腳與右後腳一起擺,右前腳與左後腳往反方向擺。繞 x 軸轉正的角度是腳往前(-z)踢。
+      // 跳起來時跑步的擺動收起來,換成前腳往前伸、後腳往後蹬
+      const swing = Math.sin(phase) * blend * (1 - rise)
+      const reach = rise * HOP.legReach
+      frontLeft.rotation.x = swing * LEG_SWING + reach
+      backRight.rotation.x = swing * LEG_SWING - reach
+      frontRight.rotation.x = -swing * LEG_SWING + reach
+      backLeft.rotation.x = -swing * LEG_SWING - reach
       // 每跨一步身體起伏一次,所以用 |sin|
-      torso.position.y = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
-      head.rotation.x = Math.sin(phase * 2) * HEAD_NOD * blend
+      torso.position.y = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend + rise * HOP.height
+      // 繞 x 軸轉正的角度是抬頭
+      head.rotation.x = Math.sin(phase * 2) * HEAD_NOD * blend + rise * HOP.headLift
       // blend 是 0 時 scale 也是 0,這時矩陣不可逆、算不出光照,所以要把舌頭藏起來不畫
       tongue.visible = blend > 0
       tongue.scale.y = blend

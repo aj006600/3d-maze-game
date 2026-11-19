@@ -12,6 +12,7 @@ import {
   Vector3,
 } from 'three'
 
+import { createFeedbackClip, easeInOut, hopOf } from './collectFeedback.js'
 import { createCanvasTexture, createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 import { createSuitcaseFigure } from './suitcaseFigure.js'
 import { paintTigerStripes, TIGER_ORANGE, TIGER_TILE_SIZE } from './tigerStripes.js'
@@ -63,6 +64,13 @@ const FORWARD_LEAN = 0.15
 // - tilt 是跑起來時登機箱往後倒的角度。
 const CARRY = { splay: 0.32, pullBack: 0.45, tilt: (35 * Math.PI) / 180 }
 
+// 收集成功時的歡呼:舉起右手、原地小跳一下。時間點都是整段回饋的幾分之幾。
+// - armRaise 是右手臂舉起時往外張的角度,接近 π 就是舉過頭頂。
+// - 右手在 raise 舉到最高,停到 lower 開始放下,回饋播完時剛好回到原位。
+// - 從 hopFrom 起跳、hopTo 落地,hopHeight 是跳起來的高度,單位與世界座標相同。
+// 左手仍然握著拉桿,登機箱留在地上:跳起來時拉桿跟著手的高度伸長
+const CHEER = { armRaise: 2.75, raise: 0.15, lower: 0.6, hopFrom: 0.1, hopTo: 0.55, hopHeight: 0.2 }
+
 /**
  * 建立主角的人與她左手拉著的登機箱,`object` 要由呼叫端加進場景。
  *
@@ -72,6 +80,9 @@ const CARRY = { splay: 0.32, pullBack: 0.45, tilt: (35 * Math.PI) / 180 }
  *   dt 是經過幾秒;cameraPosition 是鏡頭這一幀在世界座標的位置。
  *   有在移動就播跑步動作,登機箱跟著往後倒、拖在左後方;停下後很快回到站姿並保持靜止,登機箱直立在左側。
  *   登機箱的輪子依 distance 轉動,倒退時反轉;鏡頭離登機箱太近時,登機箱會暫時藏起來。
+ *
+ * 收集成功時呼叫 `cheer()`:主角舉起右手、原地小跳一下,左手仍然握著登機箱,登機箱留在地上。
+ * 歡呼還沒播完時又呼叫,第二次會等第一次播完再從頭播。動作由之後每一幀的 `animate` 推進。
  *
  * 只能在瀏覽器裡建立,因為虎紋貼圖要用 canvas 畫。
  * 用完必須呼叫 `dispose()` 釋放 geometry、material 與貼圖。
@@ -159,6 +170,7 @@ export function createPlayerFigure() {
   object.add(hips, suitcase.object)
 
   const runCycle = createRunCycle(STRIDE_LENGTH)
+  const cheerClip = createFeedbackClip()
   const grip = new Vector3()
 
   return {
@@ -166,14 +178,22 @@ export function createPlayerFigure() {
     place(position, heading) {
       placeFigure(object, position, heading)
     },
+    cheer() {
+      cheerClip.play()
+    },
     animate(distance, dt, cameraPosition) {
       const { phase, blend } = runCycle.advance(Math.abs(distance), dt)
+      const feedback = cheerClip.advance(dt)
       const swing = Math.sin(phase) * blend
       leftLeg.rotation.x = swing * LEG_SWING
       rightLeg.rotation.x = -swing * LEG_SWING
-      rightArm.rotation.x = swing * ARM_SWING
+      // 右手舉起來時不再跟著跑步前後擺動
+      const raise = raiseOf(feedback)
+      rightArm.rotation.x = swing * ARM_SWING * (1 - raise)
+      rightArm.rotation.z = ARM.splay + (CHEER.armRaise - ARM.splay) * raise
       // 每跨一步身體起伏一次,所以用 |sin|;繞 x 軸轉負的角度是往前(-z)傾
-      hips.position.y = HIP_HEIGHT + Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
+      const bob = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
+      hips.position.y = HIP_HEIGHT + bob + hopOf(feedback, CHEER.hopFrom, CHEER.hopTo) * CHEER.hopHeight
       upperBody.rotation.x = -FORWARD_LEAN * blend
       // 登機箱的姿勢用緩入緩出的強度,起跑與停下時箱子才不會猛然倒下或立起來
       const carry = blend * blend * (3 - 2 * blend)
@@ -192,6 +212,15 @@ export function createPlayerFigure() {
       suitcase.dispose()
     },
   }
+}
+
+// 歡呼時右手舉起的程度,0 是平常的位置、1 是舉到最高。feedback 是歡呼播到哪裡,沒有在播時是 null。
+// 舉起與放下都頭尾放慢,手才不會突然停住
+function raiseOf(feedback) {
+  if (feedback === null) return 0
+  if (feedback < CHEER.raise) return easeInOut(feedback / CHEER.raise)
+  if (feedback < CHEER.lower) return 1
+  return easeInOut((1 - feedback) / (1 - CHEER.lower))
 }
 
 // 一條腿:從髖關節往下到腳踝的直筒褲管,加上黑色低跟鞋。原點在髖關節

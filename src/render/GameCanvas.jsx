@@ -16,6 +16,7 @@ const MAX_FRAME_SECONDS = 0.1
 
 /**
  * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動。
+ * 收集成功時,被收集的字母、主角與狗會在畫布上播收集的回饋。
  *
  * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變,按 F 也沒有效果。
  * `active` 變成 false 時,被畫布鎖住的游標會被放開,玩家才點得到疊在畫布上的按鈕。
@@ -120,7 +121,16 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
       if (activeRef.current) {
         game.step({ ...input, dt })
         // 互動在移動之後處理,判斷的是主角這一幀跑完之後所在的格子
-        for (let i = 0; i < interactions; i += 1) callbacksRef.current.onInteract?.(game.interact())
+        for (let i = 0; i < interactions; i += 1) {
+          const result = game.interact()
+          if (result === 'collected') {
+            // 進度剛加一,所以剛收集的是通關字串裡的第 progress 個字母
+            letterFigures.playCollect(game.phrase[game.progress - 1])
+            figure.cheer()
+            dogFigure.hop()
+          }
+          callbacksRef.current.onInteract?.(result)
+        }
       }
       if (game.doorOpen && !doorOpen) {
         doorOpen = true
