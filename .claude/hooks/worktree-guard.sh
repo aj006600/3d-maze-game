@@ -3,7 +3,7 @@
 # Bash 的 `git worktree add`,以及沒帶 `path` 的 EnterWorktree(它會自己建 worktree)。
 # Claude Code PreToolUse hook(註冊於 .claude/settings.json,matcher 是 Bash|EnterWorktree)。
 #
-# 為什麼是硬擋:`make worktree` 開的 branch 不追蹤 origin/main、會複製主 checkout 的 .env,
+# 為什麼是硬擋:`make worktree` 開的 branch 不追蹤 origin/main,
 # 目錄名也固定,`make worktree-rm` 才找得到它並檢查有沒有未 push 的東西。另外兩條路這些都不做,
 # 而 agent 就算讀過 Makefile 也可能直接選內建工具,只寫在 CLAUDE.md 擋不住。
 #
@@ -86,7 +86,7 @@ print("block" if blocked else "allow")
 
 if [ "$verdict" = "block" ]; then
     echo "[worktree-guard] BLOCKED — 本專案的 worktree 一律由 make worktree 開。" >&2
-    echo "[worktree-guard] make worktree 開的 branch 不追蹤 origin/main、會複製 .env,目錄也開在 make worktree-rm 收得到的位置(見 CLAUDE.md Development workflow)。" >&2
+    echo "[worktree-guard] make worktree 開的 branch 不追蹤 origin/main,目錄也開在 make worktree-rm 收得到的位置(見 CLAUDE.md Development workflow)。" >&2
     echo "[worktree-guard] 正確做法:在主 checkout 跑 make worktree ISSUE=<n> BRANCH=<feat/slug>,再用 EnterWorktree 的 path 進它建好的目錄。" >&2
     echo "[worktree-guard] 手上沒有 issue 編號,或這個專案沒有 make worktree 時,先停下來問使用者。" >&2
     # PreToolUse 只有 exit 2 會擋下並把 stderr 交給 Claude;exit 1 是 non-blocking error,指令照樣執行

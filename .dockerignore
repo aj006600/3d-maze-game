@@ -1,2 +1,7 @@
 node_modules/
 dist/
+.git/
+# make worktree 開的 worktree 在這底下:ESLint 與 Prettier 掃 image 裡的整個目錄,會掃到別的 worktree 的程式碼
+.claude/
+# 主機的 .env.<env> 可能含機密,不能被 COPY 進 image
+.env*

@@ -151,7 +151,10 @@ export function createDogFollower(game) {
     const outward = { x: right.x * side, z: right.z * side }
     const spotAt = (lag) => {
       const anchor = pointBehind(player, lag)
-      const spot = slide(walls, anchor, { x: anchor.x + outward.x * SIDE_OFFSET, z: anchor.z + outward.z * SIDE_OFFSET })
+      const spot = slide(walls, anchor, {
+        x: anchor.x + outward.x * SIDE_OFFSET,
+        z: anchor.z + outward.z * SIDE_OFFSET,
+      })
       const reach = (spot.x - anchor.x) * outward.x + (spot.z - anchor.z) * outward.z
       return { spot, blocked: Math.min(Math.max(1 - reach / SIDE_OFFSET, 0), 1) }
     }

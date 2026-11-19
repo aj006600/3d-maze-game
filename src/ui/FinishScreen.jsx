@@ -43,7 +43,15 @@ export default function FinishScreen({ onRestart }) {
         {CONFETTI.map(({ left, color, width, height, duration, delay }, i) => (
           <span
             key={i}
-            style={{ ...styles.piece, left, width, height, background: color, animationDuration: duration, animationDelay: delay }}
+            style={{
+              ...styles.piece,
+              left,
+              width,
+              height,
+              background: color,
+              animationDuration: duration,
+              animationDelay: delay,
+            }}
           />
         ))}
       </div>

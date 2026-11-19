@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "3d-maze-game",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{js,jsx}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx}\""
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,7 +18,12 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
     "vite": "^6.4.0",
     "vitest": "^5.1.0"
   }

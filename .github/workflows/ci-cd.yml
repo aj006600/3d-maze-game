@@ -16,35 +16,27 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # 跑在 backend dev stage 容器裡,與本機 make test 同一套環境
-  test-backend:
+  # 跑在 dev stage 容器裡,與本機 make test / make lint 同一套環境
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --target dev -t backend-test backend
-      - run: docker run --rm backend-test ruff check .
-      - run: docker run --rm backend-test ruff format --check .
-      - run: docker run --rm backend-test pytest -q
-
-  # 跑在 frontend dev stage 容器裡,與本機 make test-frontend 同一套環境
-  test-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build --target dev -t frontend-test frontend
-      - run: docker run --rm frontend-test npm test
+      - run: docker build --target dev -t dev .
+      - run: docker run --rm dev npm test
+      - run: docker run --rm dev npm run lint
+      - run: docker run --rm dev npm run format:check
 
   # 出貨的 nginx stage 只驗 build 得過
-  test-frontend-build:
+  test-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build frontend
+      - run: docker build .
 
-  # 只有 Release 會產生 image;不指定 target,Docker 建最後一個 stage(runtime)。
+  # 只有 Release 會產生 image;不指定 target,Docker 建最後一個 stage(nginx)。
   # 同時 build amd64 與 arm64:arm64 那半在 amd64 runner 上用 QEMU 模擬,慢幾分鐘,只在 Release 時付
   build:
-    needs: [test-backend, test-frontend, test-frontend-build]
+    needs: [test, test-build]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
@@ -64,10 +56,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # --push 直接推成一個含兩個架構的 manifest;docker pull 會自動挑主機的架構
-      - run: |
-          for svc in backend frontend; do
-            docker buildx build --platform linux/amd64,linux/arm64 --push --tag "$IMAGE-$svc:$TAG" "$svc"
-          done
+      - run: docker buildx build --platform linux/amd64,linux/arm64 --push --tag "$IMAGE:$TAG" .
       # 部署指令印在 run summary,tag 直接填好省得回頭查
       - run: |
           {
