@@ -12,7 +12,7 @@ import {
   Vector3,
 } from 'three'
 
-import { createFeedbackClip, hopOf } from './collectFeedback.js'
+import { createFeedbackClip, easeInOut, hopOf } from './collectFeedback.js'
 import { createCanvasTexture, createRunCycle, part, placeFigure } from './lowPolyFigure.js'
 import { createSuitcaseFigure } from './suitcaseFigure.js'
 import { paintTigerStripes, TIGER_ORANGE, TIGER_TILE_SIZE } from './tigerStripes.js'
@@ -183,17 +183,17 @@ export function createPlayerFigure() {
     },
     animate(distance, dt, cameraPosition) {
       const { phase, blend } = runCycle.advance(Math.abs(distance), dt)
-      const cheer = cheerClip.advance(dt)
+      const feedback = cheerClip.advance(dt)
       const swing = Math.sin(phase) * blend
       leftLeg.rotation.x = swing * LEG_SWING
       rightLeg.rotation.x = -swing * LEG_SWING
       // 右手舉起來時不再跟著跑步前後擺動
-      const raise = raiseOf(cheer)
+      const raise = raiseOf(feedback)
       rightArm.rotation.x = swing * ARM_SWING * (1 - raise)
       rightArm.rotation.z = ARM.splay + (CHEER.armRaise - ARM.splay) * raise
       // 每跨一步身體起伏一次,所以用 |sin|;繞 x 軸轉負的角度是往前(-z)傾
       const bob = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
-      hips.position.y = HIP_HEIGHT + bob + hopOf(cheer, CHEER.hopFrom, CHEER.hopTo) * CHEER.hopHeight
+      hips.position.y = HIP_HEIGHT + bob + hopOf(feedback, CHEER.hopFrom, CHEER.hopTo) * CHEER.hopHeight
       upperBody.rotation.x = -FORWARD_LEAN * blend
       // 登機箱的姿勢用緩入緩出的強度,起跑與停下時箱子才不會猛然倒下或立起來
       const carry = blend * blend * (3 - 2 * blend)
@@ -214,12 +214,13 @@ export function createPlayerFigure() {
   }
 }
 
-// 歡呼時右手舉起的程度,0 是平常的位置、1 是舉到最高。cheer 是歡呼播到哪裡,沒有在播時是 null。
+// 歡呼時右手舉起的程度,0 是平常的位置、1 是舉到最高。feedback 是歡呼播到哪裡,沒有在播時是 null。
 // 舉起與放下都頭尾放慢,手才不會突然停住
-function raiseOf(cheer) {
-  if (cheer === null) return 0
-  const t = cheer < CHEER.raise ? cheer / CHEER.raise : cheer < CHEER.lower ? 1 : (1 - cheer) / (1 - CHEER.lower)
-  return t * t * (3 - 2 * t)
+function raiseOf(feedback) {
+  if (feedback === null) return 0
+  if (feedback < CHEER.raise) return easeInOut(feedback / CHEER.raise)
+  if (feedback < CHEER.lower) return 1
+  return easeInOut((1 - feedback) / (1 - CHEER.lower))
 }
 
 // 一條腿:從髖關節往下到腳踝的直筒褲管,加上黑色低跟鞋。原點在髖關節

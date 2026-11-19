@@ -40,7 +40,7 @@ const BOB_HEIGHT = 0.04
 const HEAD_NOD = 0.08
 
 // 收集成功時原地跳一下。從 from 起跳、to 落地,兩者都是整段回饋的幾分之幾;height 是跳起來的高度。
-// 跳在空中時前腳往前伸、後腳往後蹬,頭往上抬。這些角度都比跑步時小,整個身體仍然落在 DOG_RADIUS 以內
+// 跳在空中時前腳往前伸、後腳往後蹬,頭往上抬。腳伸出的角度比跑步時小,整個身體仍然落在 DOG_RADIUS 以內
 const HOP = { from: 0.1, to: 0.5, height: 0.18, legReach: 0.5, headLift: 0.25 }
 
 /**
@@ -141,19 +141,19 @@ export function createDogFigure() {
     },
     animate(distance, dt) {
       const { phase, blend } = runCycle.advance(distance, dt)
-      const hop = hopOf(hopClip.advance(dt), HOP.from, HOP.to)
+      const rise = hopOf(hopClip.advance(dt), HOP.from, HOP.to)
       // 小跑步:左前腳與右後腳一起擺,右前腳與左後腳往反方向擺。繞 x 軸轉正的角度是腳往前(-z)踢。
       // 跳起來時跑步的擺動收起來,換成前腳往前伸、後腳往後蹬
-      const swing = Math.sin(phase) * blend * (1 - hop)
-      const reach = hop * HOP.legReach
+      const swing = Math.sin(phase) * blend * (1 - rise)
+      const reach = rise * HOP.legReach
       frontLeft.rotation.x = swing * LEG_SWING + reach
       backRight.rotation.x = swing * LEG_SWING - reach
       frontRight.rotation.x = -swing * LEG_SWING + reach
       backLeft.rotation.x = -swing * LEG_SWING - reach
       // 每跨一步身體起伏一次,所以用 |sin|
-      torso.position.y = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend + hop * HOP.height
+      torso.position.y = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend + rise * HOP.height
       // 繞 x 軸轉正的角度是抬頭
-      head.rotation.x = Math.sin(phase * 2) * HEAD_NOD * blend + hop * HOP.headLift
+      head.rotation.x = Math.sin(phase * 2) * HEAD_NOD * blend + rise * HOP.headLift
       // blend 是 0 時 scale 也是 0,這時矩陣不可逆、算不出光照,所以要把舌頭藏起來不畫
       tongue.visible = blend > 0
       tongue.scale.y = blend

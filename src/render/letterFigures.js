@@ -2,7 +2,8 @@
 // 目標字母與干擾字母用完全相同的外觀;字母在哪一格由遊戲核心決定,這裡只負責外觀、擺放、飄浮動作與收集的回饋。
 import { BoxGeometry, Color, Group, InstancedMesh, Matrix4, MeshStandardMaterial, Object3D } from 'three'
 
-import { createFeedbackClip, FEEDBACK_SECONDS } from './collectFeedback.js'
+import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
+import { createFeedbackClip, easeInOut } from './collectFeedback.js'
 import { toWorld } from './mazeScene.js'
 
 // 5×7 的點陣字形,由上而下每列一個字串,`#` 是實心的方塊
@@ -36,6 +37,8 @@ const GLYPHS = {
 }
 
 const LETTER_COLOR = '#ff5fa2'
+// 字母平常微微發光的強度,在暗一點的死路裡也看得清楚
+const LETTER_GLOW = 0.25
 // 一個方塊的邊長與字母的厚度,單位與世界座標相同
 const PIXEL_SIZE = 0.24
 const DEPTH = 0.36
@@ -51,12 +54,18 @@ const SWAY_SECONDS = 4
 const HIDE_DISTANCE = Math.hypot(GLYPHS.A[0].length * PIXEL_SIZE, GLYPHS.A.length * PIXEL_SIZE, DEPTH) / 2 + 0.15
 
 // 收集的回饋裡的時間點都是整段回饋的幾分之幾。
-// 字母先閃一下白光,同時快速轉一圈並噴出一圈小方塊;轉完一圈之後,小方塊還在往下掉,掉完就消失
-const FLASH_COLOR = '#ffffff'
+// 字母先閃一下白光,同時快速轉一圈並噴出一圈小方塊;轉完一圈之後,小方塊還在往下掉,掉完就消失。
+// 白光在 peak 最亮,這時的發光強度是 intensity,到 end 退回平常的顏色
 const FLASH = { peak: 0.08, end: 0.45, intensity: 1.2 }
 const SPIN_END = 0.7
-// 噴出來的小方塊,單位與世界座標相同,速度與重力以秒計。
-// 小方塊在字母正面的平面上往四周噴出一圈,同時被往上拋一點,之後被重力拉著往下掉
+const letterColor = new Color(LETTER_COLOR)
+const flashColor = new Color('#ffffff')
+// 噴出來的小方塊。小方塊在字母正面的平面上往四周噴出一圈,同時被往上拋一點,之後被重力拉著往下掉。
+// - size、speed、lift 與 gravity 的單位與世界座標相同,速度與重力以秒計。
+// - 每個小方塊的方向會在一圈裡平均分配的位置上往後偏,最多偏 angleJitter 個間隔;
+//   速度在 speed 上下 speedJitter 的比例內變化;depthSpread 是往字母前後散開的最大速度。
+// - tumble 是小方塊翻滾的速度,每秒最多轉幾弧度。
+// - 播到 shrinkFrom 之後小方塊開始縮小,播完時縮到看不見。
 const SPARK = {
   count: 18,
   size: 0.12,
@@ -64,9 +73,13 @@ const SPARK = {
   speed: 2.4,
   lift: 1.4,
   gravity: 7,
-  tumble: 9,
+  angleJitter: 0.6,
+  speedJitter: 0.25,
+  depthSpread: 0.4,
+  tumble: 4.5,
   shrinkFrom: 0.6,
 }
+const sparkPose = new Object3D()
 
 // 字母的正面預設朝 +z(南方)。死路的開口在哪一側,就繞 y 軸轉到正面朝向那一側,從走道上看到的才是正面
 const FACING = { south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 }
@@ -92,7 +105,7 @@ export function createLetterFigures(game) {
   const material = new MeshStandardMaterial({
     color: LETTER_COLOR,
     emissive: LETTER_COLOR,
-    emissiveIntensity: 0.25,
+    emissiveIntensity: LETTER_GLOW,
     roughness: 0.5,
   })
   const sparkBox = new BoxGeometry(SPARK.size, SPARK.size, SPARK.size)
@@ -117,7 +130,15 @@ export function createLetterFigures(game) {
     const [opening] = maze.openings({ col, row })
     object.add(figure)
     // 收集回饋要用的材質與小方塊,到第一次被收集時才建立
-    return { letter, figure, mesh, facing: FACING[opening], clip: createFeedbackClip(), flash: null, sparks: null }
+    return {
+      letter,
+      figure,
+      mesh,
+      facing: FACING[opening],
+      clip: createFeedbackClip(),
+      flashMaterial: null,
+      sparks: null,
+    }
   })
 
   let lastSeconds = null
@@ -126,7 +147,7 @@ export function createLetterFigures(game) {
     object,
     playCollect(letter) {
       const entry = figures.find((candidate) => candidate.letter === letter)
-      entry.flash ??= material.clone()
+      entry.flashMaterial ??= material.clone()
       if (entry.sparks === null) {
         entry.sparks = createSparks(sparkBox, sparkMaterial, entry)
         object.add(entry.sparks.mesh)
@@ -144,17 +165,17 @@ export function createLetterFigures(game) {
         const feedback = entry.clip.advance(dt)
         figure.position.y = FLOAT_HEIGHT + bob * BOB_HEIGHT
         figure.rotation.y = facing + sway * SWAY_ANGLE + spinOf(feedback)
-        mesh.material = feedback === null ? material : entry.flash
-        if (feedback !== null) paintFlash(entry.flash, flashOf(feedback))
+        mesh.material = feedback === null ? material : entry.flashMaterial
+        if (feedback !== null) paintFlash(entry.flashMaterial, flashOf(feedback))
         if (entry.sparks !== null) placeSparks(entry.sparks, feedback)
         // 主角從死路往外走時,跟在背後的鏡頭會穿過字母;穿過的那一下不藏起來,畫面會閃過一整片字母的顏色
         figure.visible = figure.position.distanceTo(cameraPosition) > HIDE_DISTANCE
       })
     },
     dispose() {
-      for (const { mesh, flash, sparks } of figures) {
+      for (const { mesh, flashMaterial, sparks } of figures) {
         mesh.dispose()
-        flash?.dispose()
+        flashMaterial?.dispose()
         sparks?.mesh.dispose()
       }
       box.dispose()
@@ -169,8 +190,7 @@ export function createLetterFigures(game) {
 // 前 SPIN_END 轉滿一圈,頭尾放慢,接回平常的擺動時才不會頓一下
 function spinOf(feedback) {
   if (feedback === null) return 0
-  const t = Math.min(feedback / SPIN_END, 1)
-  return Math.PI * 2 * t * t * (3 - 2 * t)
+  return Math.PI * 2 * easeInOut(Math.min(feedback / SPIN_END, 1))
 }
 
 // 白光的強度,0 是平常的顏色、1 是最白。很快亮到最白,再慢慢退回去
@@ -179,13 +199,10 @@ function flashOf(feedback) {
   return Math.max(0, 1 - (feedback - FLASH.peak) / (FLASH.end - FLASH.peak))
 }
 
-const letterColor = new Color(LETTER_COLOR)
-const flashColor = new Color(FLASH_COLOR)
-
 function paintFlash(material, strength) {
   material.color.lerpColors(letterColor, flashColor, strength)
   material.emissive.lerpColors(letterColor, flashColor, strength)
-  material.emissiveIntensity = 0.25 + strength * (FLASH.intensity - 0.25)
+  material.emissiveIntensity = LETTER_GLOW + strength * (FLASH.intensity - LETTER_GLOW)
 }
 
 /**
@@ -199,24 +216,24 @@ function createSparks(geometry, material, { figure, facing }) {
   mesh.position.set(figure.position.x, FLOAT_HEIGHT, figure.position.z)
   mesh.rotation.y = facing
   mesh.visible = false
+  // 在 -1 到 1 之間均勻分布的亂數
+  const spread = () => Math.random() * 2 - 1
   const trajectories = Array.from({ length: SPARK.count }, (_, i) => {
-    const angle = ((i + Math.random() * 0.6) / SPARK.count) * Math.PI * 2
-    const speed = SPARK.speed * (0.75 + Math.random() * 0.5)
+    const angle = ((i + Math.random() * SPARK.angleJitter) / SPARK.count) * Math.PI * 2
+    const speed = SPARK.speed * (1 + spread() * SPARK.speedJitter)
     return {
-      velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed + SPARK.lift, (Math.random() - 0.5) * 0.8],
-      tumble: [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5].map((axis) => axis * SPARK.tumble),
+      velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed + SPARK.lift, spread() * SPARK.depthSpread],
+      tumble: [spread(), spread(), spread()].map((axis) => axis * SPARK.tumble),
     }
   })
   return { mesh, trajectories }
 }
 
-const sparkPose = new Object3D()
-
 // 依回饋播到哪裡擺好每個小方塊。沒有在播時整圈藏起來;快播完時小方塊縮小到消失
 function placeSparks({ mesh, trajectories }, feedback) {
   mesh.visible = feedback !== null
   if (feedback === null) return
-  const time = feedback * FEEDBACK_SECONDS
+  const time = feedback * COLLECT_FEEDBACK_SECONDS
   const size = feedback < SPARK.shrinkFrom ? 1 : (1 - feedback) / (1 - SPARK.shrinkFrom)
   trajectories.forEach(({ velocity: [vx, vy, vz], tumble: [tx, ty, tz] }, i) => {
     sparkPose.position.set(vx * time, vy * time - (SPARK.gravity * time * time) / 2, vz * time)

@@ -1,7 +1,7 @@
 // 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」,
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
-import { FEEDBACK_SECONDS } from '../render/collectFeedback.js'
+import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
 import Key from './Key.jsx'
 import { pill } from './screenStyles.js'
 
@@ -132,7 +132,7 @@ const styles = {
   collected: {
     color: '#ff5fa2',
     textShadow: '0 0 10px rgba(255, 95, 162, 0.55)',
-    animation: `hud-collected ${FEEDBACK_SECONDS}s ease-out`,
+    animation: `hud-collected ${COLLECT_FEEDBACK_SECONDS}s ease-out`,
   },
   next: {
     color: '#e0577d',
@@ -173,7 +173,7 @@ const styles = {
     whiteSpace: 'nowrap',
     boxShadow: '0 6px 20px rgba(224, 87, 125, 0.4)',
     opacity: 0,
-    animation: `hud-door-opened 3s ease-out ${FEEDBACK_SECONDS}s forwards`,
+    animation: `hud-door-opened 3s ease-out ${COLLECT_FEEDBACK_SECONDS}s forwards`,
   },
   wrong: {
     padding: '10px 24px',

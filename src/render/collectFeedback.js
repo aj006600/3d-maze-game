@@ -1,16 +1,10 @@
-// 收集成功時,字母、主角與狗各自播一段回饋動作。這裡是三者共用的節奏:每一段多長、連續收集時怎麼排。
-// 動作本身長什麼樣子由各自的造型決定。
+// 渲染層的收集回饋共用的節奏:連續收集時怎麼排、跳一下的高度怎麼變化、動作的頭尾怎麼放慢。
+// 每一段回饋都一樣長,在同一個字母上連續收集兩次時,各個造型的第二段才會一起開始。
+// 動作本身長什麼樣子,由播它的造型決定。
+import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
 
 /**
- * 每一段回饋從頭播到尾的秒數。
- *
- * 字母、主角與狗用同一個長度,在同一個字母上連續收集兩次時,三者的第二段才會一起開始。
- * 介面層的通關字串裡剛亮起的那一格也彈跳這麼久,「門開了」也等這麼久才出現。
- */
-export const FEEDBACK_SECONDS = 0.9
-
-/**
- * 一段長 `FEEDBACK_SECONDS` 的回饋動作的播放順序。每一次收集成功都要從頭完整地播一次。
+ * 一段長 `COLLECT_FEEDBACK_SECONDS` 的回饋動作的播放順序。每一次收集成功都要從頭完整地播一次。
  *
  * - `play()` 排進一次。正在播時再呼叫,這一次會排在後面,等前一次播完才從頭播,不會打斷前一次。
  * - `advance(dt)` 每一幀呼叫一次,dt 是經過幾秒。回傳目前這一次播到哪裡,0 是開頭、1 是結尾;
@@ -28,7 +22,7 @@ export function createFeedbackClip() {
     advance(dt) {
       if (elapsed === null) return null
       elapsed += dt
-      if (elapsed >= FEEDBACK_SECONDS) {
+      if (elapsed >= COLLECT_FEEDBACK_SECONDS) {
         if (queued === 0) {
           elapsed = null
           return null
@@ -36,7 +30,7 @@ export function createFeedbackClip() {
         queued -= 1
         elapsed = 0
       }
-      return elapsed / FEEDBACK_SECONDS
+      return elapsed / COLLECT_FEEDBACK_SECONDS
     },
   }
 }
@@ -50,4 +44,9 @@ export function createFeedbackClip() {
 export function hopOf(feedback, from, to) {
   if (feedback === null || feedback <= from || feedback >= to) return 0
   return Math.sin(((feedback - from) / (to - from)) * Math.PI)
+}
+
+/** 把 0 到 1 的 t 換成頭尾放慢的同一段 0 到 1,動作開始與停下時才不會頓一下。 */
+export function easeInOut(t) {
+  return t * t * (3 - 2 * t)
 }
