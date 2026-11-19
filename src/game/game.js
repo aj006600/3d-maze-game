@@ -1,4 +1,5 @@
 // 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母,收集完就能從門走出去破關。
+// 有時限的一局,倒數歸零時還沒破關就是挑戰失敗。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
 import { PHRASE } from '../config.js'
 import { deadEndsOf, generateMaze } from './maze.js'
@@ -18,6 +19,7 @@ const RUN_SPEED = 1.25
  * 從 seed 建立一局遊戲,同一個 seed 永遠得到同一局。
  *
  * seed 是整數。`allowTeleport` 為 true 時才能呼叫 `teleport`。傳送是給畫面驗證用的,正常遊玩不要開啟。
+ * `timeLimit` 是這一局的時限,單位是秒。不給或給 null 就是不限時。
  *
  * 平面座標以格為單位:x 往東、y 往南,格子 `(col, row)` 涵蓋 `col ≤ x < col + 1`、`row ≤ y < row + 1`。
  * 朝向是弧度:0 朝北,從上方俯瞰時順時針增加,所以 π/2 朝東。
@@ -36,8 +38,12 @@ const RUN_SPEED = 1.25
  * - `doorOpen`:門是不是打開了。收集完最後一個字母的那一次 `interact()` 就打開,之後不會再鎖上。
  * - `atDoor`:主角所在的格子是不是門所在的那一格。只看位置,與門開了沒有無關。
  * - `finished`:是不是已經破關。門打開後,主角跑出門、離開迷宮的那一步就破關,之後一直是 true。
+ * - `countdown`:倒數,也就是還剩幾秒。不限時的一局是 null。
+ *   它只由 `step` 的 dt 扣除,不讀系統時鐘。歸零後停在 0,破關之後也停住不再減少。
+ * - `failed`:是不是已經挑戰失敗。倒數歸零的那一步還沒破關,就挑戰失敗,之後一直是 true。
+ *   同一步裡先判定破關,所以走出門的那一步剛好用完時間時算破關;破關之後也不會再變成挑戰失敗。
  * - `canInteract`:主角所在的格子是不是放著字母的死路。只看位置,與進度無關。
- * - `interact()`:按下一次互動鍵,回傳這次互動的結果:
+ * - `interact()`:按下一次互動鍵,回傳這次互動的結果。挑戰失敗之後一律回傳 null,進度不變。
  *   - `'collected'`:主角所在的字母正是當下輪到的那一個,進度加一。字母留在原地,之後輪到時可以再收集。
  *   - `'wrong'`:主角所在的字母不是當下輪到的那一個,進度不變。全部收集完之後,每個字母都不是當下輪到的那一個。
  *   - `null`:主角不在有字母的死路格內,這次互動沒有任何效果。
@@ -48,9 +54,11 @@ const RUN_SPEED = 1.25
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
  *   兩者都是 0 就站著不動,否則不論大小都以同一個速度跑。主角碰到牆會被擋住,斜向撞牆時沿牆滑動。
+ *   有時限的一局在破關之前,每一步都從倒數扣掉 dt 秒,站著不動的那一步也一樣。
+ *   挑戰失敗之後呼叫沒有任何效果:主角不動,朝向也不變。
  * - `teleport({ col, row })`:把主角移到該格的中央,朝向不變。沒有開啟 `allowTeleport` 時會丟出錯誤。
  */
-export function createGame(seed, { allowTeleport = false } = {}) {
+export function createGame(seed, { allowTeleport = false, timeLimit = null } = {}) {
   const random = createRandom(seed)
   const { maze, start, door, letters } = generateLayout(random)
   let walls = wallsOf(maze)
@@ -58,6 +66,8 @@ export function createGame(seed, { allowTeleport = false } = {}) {
   let progress = 0
   let doorOpen = false
   let finished = false
+  let countdown = timeLimit
+  let failed = false
   return {
     maze,
     start,
@@ -79,6 +89,12 @@ export function createGame(seed, { allowTeleport = false } = {}) {
     get finished() {
       return finished
     },
+    get countdown() {
+      return countdown
+    },
+    get failed() {
+      return failed
+    },
     get canInteract() {
       return letterAt(letters, player) !== undefined
     },
@@ -86,6 +102,7 @@ export function createGame(seed, { allowTeleport = false } = {}) {
       return isSameCell(cellOf(player), door)
     },
     interact() {
+      if (failed) return null
       const placed = letterAt(letters, player)
       if (placed === undefined) return null
       if (placed.letter !== PHRASE_LETTERS[progress]) return 'wrong'
@@ -97,18 +114,24 @@ export function createGame(seed, { allowTeleport = false } = {}) {
       return 'collected'
     },
     step({ forward, right, heading, dt }) {
+      if (failed) return
+      // 破關之後倒數停住。破關的那一步仍然要從倒數扣掉 dt 秒
+      if (countdown !== null && !finished) countdown = Math.max(countdown - dt, 0)
       player.heading = heading
       const length = Math.hypot(forward, right)
-      if (length === 0) return
-      // 不論輸入的大小,只要有方向就以同一個速度跑:沒有走路,斜向也不會比較快
-      const distance = RUN_SPEED * dt
-      const sin = Math.sin(heading)
-      const cos = Math.cos(heading)
-      const dx = ((sin * forward + cos * right) / length) * distance
-      const dy = ((-cos * forward + sin * right) / length) * distance
-      Object.assign(player, moveAgainstWalls(walls, player, dx, dy))
-      // 門是外牆上唯一能打開的缺口,所以主角離開迷宮的格子,就是從打開的門走出去了
-      if (!isInside(maze, player)) finished = true
+      if (length > 0) {
+        // 不論輸入的大小,只要有方向就以同一個速度跑:沒有走路,斜向也不會比較快
+        const distance = RUN_SPEED * dt
+        const sin = Math.sin(heading)
+        const cos = Math.cos(heading)
+        const dx = ((sin * forward + cos * right) / length) * distance
+        const dy = ((-cos * forward + sin * right) / length) * distance
+        Object.assign(player, moveAgainstWalls(walls, player, dx, dy))
+        // 門是外牆上唯一能打開的缺口,所以主角離開迷宮的格子,就是從打開的門走出去了
+        if (!isInside(maze, player)) finished = true
+      }
+      // 移動並判定破關之後才判定倒數歸零:走出門的那一步剛好用完時間時算破關
+      if (countdown === 0 && !finished) failed = true
     },
     teleport({ col, row }) {
       if (!allowTeleport) throw new Error('teleport is disabled; create the game with { allowTeleport: true }')

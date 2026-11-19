@@ -1,15 +1,16 @@
-// 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、有沒有靜音,
-// 並把這兩件事與遊戲中的事件(收集、按錯、門打開)告訴音訊,由它播對應的音樂與音效。
+// 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、選了哪個時限、有沒有靜音,
+// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開)告訴音訊,由它播對應的音樂與音效。
 //
 // 暫停只有一條規則:畫面停在遊戲中,而且游標鎖在畫布上,遊戲才推進。游標一放開就是暫停,
 // 不論是按 Esc、切到別的視窗還是切到別的分頁,瀏覽器都會放開游標,所以三者走同一條路。
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createAudio } from './audio/audio.js'
-import { PHRASE, SEED } from './config.js'
+import { DEFAULT_TIME_LIMIT, PHRASE, SEED } from './config.js'
 import { createGame } from './game/game.js'
 import GameCanvas from './render/GameCanvas.jsx'
 import EntryScreen from './ui/EntryScreen.jsx'
+import FailScreen from './ui/FailScreen.jsx'
 import FinishScreen from './ui/FinishScreen.jsx'
 import Hud from './ui/Hud.jsx'
 import PauseScreen from './ui/PauseScreen.jsx'
@@ -19,13 +20,15 @@ import StartScreen from './ui/StartScreen.jsx'
 // 測試用的傳送 hook 只在網址帶 ?teleport 時開啟。正常遊玩的網址不帶它,所以玩家碰不到這個 hook
 const allowTeleport = new URLSearchParams(window.location.search).has('teleport')
 
-const newGame = () => createGame(SEED, { allowTeleport })
+const newGame = (timeLimit) => createGame(SEED, { allowTeleport, timeLimit })
 
 // 用 KeyboardEvent.code 認按鍵的實體位置,與移動鍵的認法一致
 const MUTE_KEY = 'KeyM'
 
 export default function App() {
-  const [game, setGame] = useState(newGame)
+  // 選的時限只存在記憶體裡:回到開始畫面時仍是上次選的,重新整理網頁後回到預設
+  const [timeLimit, setTimeLimit] = useState(DEFAULT_TIME_LIMIT)
+  const [game, setGame] = useState(() => newGame(DEFAULT_TIME_LIMIT))
   // 畫面狀態刻意不存進 localStorage 或網址,重新整理網頁才會回到入口畫面
   const [screen, setScreen] = useState('entry')
   // 靜音同樣不記住,重新整理網頁後回到有聲音
@@ -38,10 +41,12 @@ export default function App() {
 
   const handleStatusChange = useCallback((next) => {
     setStatus(next)
+    // 遊戲核心保證兩者不會同時是 true
     if (next.finished) setScreen('finished')
+    if (next.failed) setScreen('failed')
   }, [])
 
-  // 鎖定被瀏覽器拒絕時也會收到 false,剛按「開始」或「再玩一次」的新一局因此停在暫停畫面
+  // 鎖定被瀏覽器拒絕時也會收到 false,剛按「開始」「再玩一次」或「再試一次」的新一局因此停在暫停畫面
   const handlePointerLockChange = useCallback((locked) => {
     setScreen((current) => {
       if (locked && current === 'paused') return 'playing'
@@ -100,17 +105,14 @@ export default function App() {
     setScreen('start')
   }
 
-  // 「開始」與「再玩一次」先切到遊戲中,不等鎖定的結果:鎖定成功時畫面才不會先閃過暫停畫面。
-  // 鎖定的結果出來之前,畫布不會推進遊戲
+  // 「開始」「再玩一次」與「再試一次」都用目前選的時限建立新的一局,直接進入遊戲。
+  // 它們先切到遊戲中,不等鎖定的結果:鎖定成功時畫面才不會先閃過暫停畫面。
+  // 鎖定的結果出來之前,畫布不會推進遊戲,倒數也還沒開始走
   function start() {
     // 瀏覽器只在使用者事件裡允許鎖定游標,所以要在按鈕的 click 裡直接鎖,不能等畫面切換之後才鎖
     canvasRef.current.lockPointer()
-    setScreen('playing')
-  }
-
-  function restart() {
     replaceGame()
-    start()
+    setScreen('playing')
   }
 
   // 畫面留在暫停畫面,等鎖定成功才回到遊戲中。按完 Esc 立刻按「繼續」時瀏覽器會拒絕鎖定,玩家再按一次就好
@@ -125,7 +127,7 @@ export default function App() {
   }
 
   function replaceGame() {
-    setGame(newGame())
+    setGame(newGame(timeLimit))
     // 上一局的狀態要一起清掉:提示不能顯示上一局的進度,「不是這個」與「門開了」也不能在提示重新出現時再播一次
     setStatus(null)
     setWrongCount(0)
@@ -152,12 +154,16 @@ export default function App() {
           wrongCount={wrongCount}
           atDoor={status.atDoor}
           doorOpen={status.doorOpen}
+          countdown={status.countdown}
         />
       )}
       {screen === 'entry' && <EntryScreen onOpen={open} />}
-      {screen === 'start' && <StartScreen onStart={start} />}
+      {screen === 'start' && <StartScreen timeLimit={timeLimit} onTimeLimitChange={setTimeLimit} onStart={start} />}
       {screen === 'paused' && <PauseScreen onResume={resume} onBackToStart={backToStart} />}
-      {screen === 'finished' && <FinishScreen onRestart={restart} onBackToStart={backToStart} />}
+      {screen === 'failed' && (
+        <FailScreen progress={status.progress} total={game.phrase.length} onRetry={start} onBackToStart={backToStart} />
+      )}
+      {screen === 'finished' && <FinishScreen onRestart={start} onBackToStart={backToStart} />}
       {giftOpened && <SpeakerIcon muted={muted} />}
     </main>
   )

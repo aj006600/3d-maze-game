@@ -1,4 +1,4 @@
-// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」、左上角的「Esc 暫停」,
+// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、有時限時的倒數、門打開時的「門開了」、左上角的「Esc 暫停」,
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它只負責顯示,不接收滑鼠事件。
 import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
@@ -51,8 +51,10 @@ const KEYFRAMES = `
  * - `atDoor` 為 true 且 `doorOpen` 為 false 時顯示「先收集完字母」。
  * - `doorOpen` 從 false 變成 true 時,「門開了」播一次,播完自己消失。一開始就是 true 時也會播一次。
  *   它等收集的回饋播完才出現:門在收集最後一個字母的那一下打開,那個字母就在畫面上方,兩者才不會疊在一起。
+ * - `countdown` 是倒數剩下的整數秒,在通關字串正下方以兩位數的「分:秒」顯示,這時「門開了」出現在倒數的下方。
+ *   它是 null 時不顯示倒數,「門開了」直接接在通關字串的下方。
  */
-export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor, doorOpen }) {
+export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor, doorOpen, countdown }) {
   return (
     <div style={styles.overlay}>
       <style>{KEYFRAMES}</style>
@@ -67,7 +69,14 @@ export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor,
           </span>
         ))}
       </div>
-      {doorOpen && <div style={styles.doorOpened}>門開了</div>}
+      {countdown !== null && <div style={styles.countdown}>{formatCountdown(countdown)}</div>}
+      {doorOpen && (
+        <div
+          style={{ ...styles.doorOpened, top: countdown === null ? DOOR_OPENED_TOP : DOOR_OPENED_TOP_WITH_COUNTDOWN }}
+        >
+          門開了
+        </div>
+      )}
       <div style={styles.pauseHint}>
         <Key>Esc</Key>暫停
       </div>
@@ -89,6 +98,12 @@ export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor,
   )
 }
 
+// 兩位數的「分:秒」,例如 300 秒是 05:00
+function formatCountdown(seconds) {
+  const twoDigits = (value) => String(value).padStart(2, '0')
+  return `${twoDigits(Math.floor(seconds / 60))}:${twoDigits(seconds % 60)}`
+}
+
 // 把通關字串拆成單字,每個字母帶著它在收集順序裡的位置;空格不佔位置
 function wordsOf(phrase) {
   let index = 0
@@ -100,6 +115,12 @@ function letterStyleOf(index, progress) {
   if (index === progress) return { ...styles.letter, ...styles.next }
   return styles.letter
 }
+
+// 倒數緊接在通關字串的下方。有倒數時「門開了」要放在倒數的下方,兩者才不會疊在一起;沒有倒數時它直接接在通關字串的下方
+const COUNTDOWN_TOP = 80
+const COUNTDOWN_HEIGHT = 40
+const DOOR_OPENED_TOP = 84
+const DOOR_OPENED_TOP_WITH_COUNTDOWN = COUNTDOWN_TOP + COUNTDOWN_HEIGHT + 12
 
 const styles = {
   overlay: {
@@ -177,10 +198,26 @@ const styles = {
     fontSize: 20,
     fontWeight: 600,
   },
-  // 放在通關字串的正下方,玩家看進度時就會看到它,也不會蓋住畫面中央偏下的主角
+  // tabular-nums 讓每個數字一樣寬,倒數每秒變動時寬度不會跟著跳
+  countdown: {
+    position: 'absolute',
+    top: COUNTDOWN_TOP,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    height: COUNTDOWN_HEIGHT,
+    boxSizing: 'border-box',
+    padding: '0 20px',
+    ...pill,
+    fontSize: 22,
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums',
+    letterSpacing: 1,
+  },
+  // 放在通關字串的下方,玩家看進度時就會看到它,也不會蓋住畫面中央偏下的主角。上緣的位置依有沒有倒數而定
   doorOpened: {
     position: 'absolute',
-    top: 84,
     left: '50%',
     padding: '12px 32px',
     borderRadius: 999,

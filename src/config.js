@@ -1,4 +1,4 @@
-// 試玩後要調整的設定集中在這裡:換一局、改祝福文字、改場景比例或鏡頭,都只改這個檔,不必動程式。
+// 試玩後要調整的設定集中在這裡:換一局、改祝福文字、改時限的選項、改場景比例或鏡頭,都只改這個檔,不必動程式。
 
 /** 決定整局配置的 seed。換一個整數就得到另一張合乎規則的迷宮。 */
 export const SEED = 20261118
@@ -8,6 +8,16 @@ export const PHRASE = 'HAPPY BIRTHDAY'
 
 /** 破關畫面上的祝福文字,照這裡的寫法顯示。 */
 export const BLESSING = '祝你生日快樂,新的一歲天天開心!(這段是佔位文字,之後會換成真正的祝福。)'
+
+/**
+ * 開始畫面上可以選的時限,單位是秒,照畫面上由左到右的順序排列。null 是不限時。
+ *
+ * 畫面上以分鐘顯示,所以有時限的值要是 60 的倍數。
+ */
+export const TIME_LIMITS = [5 * 60, 10 * 60, 20 * 60, null]
+
+/** 打開網頁時開始畫面預設選的時限,必須是 TIME_LIMITS 裡的一個值。 */
+export const DEFAULT_TIME_LIMIT = null
 
 const fromDegrees = (value) => (value * Math.PI) / 180
 
