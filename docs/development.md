@@ -55,7 +55,7 @@ make format                   # Prettier(就地改檔)
 `window.teleport(col, row)`,主角就會被移到那一格的中央(col 往東、row 往南,從 0 數起)。
 這個傳送 hook 預設關閉,網址沒帶 `?teleport` 時 `window.teleport` 不存在,正常遊玩碰不到它。
 
-驗證挑戰失敗時也不必等滿 5 分鐘:在本機暫時把 `src/config.js` 裡 `TIME_LIMITS` 最短的那個時限改短(例如 60 秒),
+驗證最後 30 秒的提醒與挑戰失敗時也不必等滿 5 分鐘:在本機暫時把 `src/config.js` 裡 `TIME_LIMITS` 最短的那個時限改短(例如 60 秒),
 驗完改回,不要提交。
 
 ### Testing workflow

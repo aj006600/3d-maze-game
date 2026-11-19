@@ -1,7 +1,7 @@
 // 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、有時限時的倒數、門打開時的「門開了」、左上角的「Esc 暫停」,
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它只負責顯示,不接收滑鼠事件。
-import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
+import { COLLECT_FEEDBACK_SECONDS, FINAL_WARNING_SECONDS } from '../config.js'
 import Key from './Key.jsx'
 import { pill } from './screenStyles.js'
 
@@ -31,6 +31,9 @@ const KEYFRAMES = `
   75% { opacity: 1; }
   100% { opacity: 0; transform: translateX(0); }
 }
+@keyframes hud-countdown-warning {
+  50% { color: rgba(229, 56, 59, 0.25); }
+}
 @keyframes hud-door-opened {
   0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
   10% { opacity: 1; transform: translateX(-50%) scale(1.15); }
@@ -53,6 +56,7 @@ const KEYFRAMES = `
  *   它等收集的回饋播完才出現:門在收集最後一個字母的那一下打開,那個字母就在畫面上方,兩者才不會疊在一起。
  * - `countdown` 是倒數剩下的整數秒,在通關字串正下方以兩位數的「分:秒」顯示,這時「門開了」出現在倒數的下方。
  *   它是 null 時不顯示倒數,「門開了」直接接在通關字串的下方。
+ *   它小於等於 `FINAL_WARNING_SECONDS` 時,數字變紅並緩慢閃動。
  */
 export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor, doorOpen, countdown }) {
   return (
@@ -69,7 +73,15 @@ export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor,
           </span>
         ))}
       </div>
-      {countdown !== null && <div style={styles.countdown}>{formatCountdown(countdown)}</div>}
+      {countdown !== null && (
+        <div
+          style={
+            countdown <= FINAL_WARNING_SECONDS ? { ...styles.countdown, ...styles.countdownWarning } : styles.countdown
+          }
+        >
+          {formatCountdown(countdown)}
+        </div>
+      )}
       {doorOpen && (
         <div
           style={{ ...styles.doorOpened, top: countdown === null ? DOOR_OPENED_TOP : DOOR_OPENED_TOP_WITH_COUNTDOWN }}
@@ -214,6 +226,11 @@ const styles = {
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums',
     letterSpacing: 1,
+  },
+  // 閃動改變的是文字顏色而不是 opacity,只有數字在閃,白色圓角底不跟著閃
+  countdownWarning: {
+    color: '#e5383b',
+    animation: 'hud-countdown-warning 2s ease-in-out infinite',
   },
   // 放在通關字串的下方,玩家看進度時就會看到它,也不會蓋住畫面中央偏下的主角。上緣的位置依有沒有倒數而定
   doorOpened: {

@@ -1,12 +1,12 @@
 // 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、選了哪個時限、有沒有靜音,
-// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開)告訴音訊,由它播對應的音樂與音效。
+// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開、倒數最後幾秒的每一秒)告訴音訊,由它播對應的音樂與音效。
 //
 // 暫停只有一條規則:畫面停在遊戲中,而且游標鎖在畫布上,遊戲才推進。游標一放開就是暫停,
 // 不論是按 Esc、切到別的視窗還是切到別的分頁,瀏覽器都會放開游標,所以三者走同一條路。
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createAudio } from './audio/audio.js'
-import { DEFAULT_TIME_LIMIT, PHRASE, SEED } from './config.js'
+import { DEFAULT_TIME_LIMIT, FINAL_WARNING_SECONDS, PHRASE, SEED } from './config.js'
 import { createGame } from './game/game.js'
 import GameCanvas from './render/GameCanvas.jsx'
 import EntryScreen from './ui/EntryScreen.jsx'
@@ -74,6 +74,22 @@ export default function App() {
   useEffect(() => {
     if (doorOpen) audio.playSound('doorOpened')
   }, [audio, doorOpen])
+
+  // 最後幾秒裡倒數顯示的秒數,其餘時候是 null。它每換成另一個數字就響一聲提示聲。
+  // 歸零的那一刻它是 null,所以不響。暫停時倒數不動,所以也不響。
+  // 遊戲核心在破關的那一步仍然會扣倒數,顯示的秒數可能剛好在那一步少一。
+  // 所以破關之後它一律是 null,破關畫面才不會再響
+  const warningSecond =
+    status !== null &&
+    !status.finished &&
+    status.countdown !== null &&
+    status.countdown >= 1 &&
+    status.countdown <= FINAL_WARNING_SECONDS
+      ? status.countdown
+      : null
+  useEffect(() => {
+    if (warningSecond !== null) audio.playSound('countdownWarning')
+  }, [audio, warningSecond])
 
   useEffect(() => {
     audio.setMuted(muted)
