@@ -1,6 +1,7 @@
 // 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」,
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
+import { FEEDBACK_SECONDS } from '../render/collectFeedback.js'
 import Key from './Key.jsx'
 import { pill } from './screenStyles.js'
 
@@ -9,6 +10,16 @@ const KEYFRAMES = `
 @keyframes hud-next-blink {
   0%, 100% { opacity: 1; transform: translateY(-3px) scale(1.12); }
   50% { opacity: 0.35; transform: translateY(0) scale(1); }
+}
+@keyframes hud-collected {
+  0% { transform: translateY(0) scale(1); }
+  25% {
+    transform: translateY(-6px) scale(1.6);
+    text-shadow: 0 0 6px #fff, 0 0 18px rgba(255, 95, 162, 0.95), 0 0 32px rgba(255, 95, 162, 0.7);
+  }
+  50% { transform: translateY(0) scale(0.9); }
+  70% { transform: translateY(-2px) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
 }
 @keyframes hud-wrong {
   0% { opacity: 0; transform: translateX(0) scale(0.9); }
@@ -34,10 +45,12 @@ const KEYFRAMES = `
  *
  * - `phrase` 是要顯示的通關字串,空格只用來分開單字,不算一個字母。
  * - `progress` 是已收集的字母數:前 progress 個字母亮起,下一個閃爍。
+ *   progress 每加一,剛亮起的那一格就放大彈跳並發光一下。
  * - `canInteract` 為 true 時顯示「按 F」。
  * - `wrongCount` 每加一,「不是這個」就從頭播一次,播完自己消失。它是 0 時不顯示。
  * - `atDoor` 為 true 且 `doorOpen` 為 false 時顯示「先收集完字母」。
  * - `doorOpen` 從 false 變成 true 時,「門開了」播一次,播完自己消失。一開始就是 true 時也會播一次。
+ *   它等收集的回饋播完才出現:門在收集最後一個字母的那一下打開,那個字母就在畫面上方,兩者才不會疊在一起。
  */
 export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor, doorOpen }) {
   return (
@@ -114,9 +127,12 @@ const styles = {
     textAlign: 'center',
     color: '#a8968a',
   },
+  // 每一格已收集的字母都帶著這個只播一次的動畫。瀏覽器只在一格剛換上它時播,所以只有剛亮起的那一格會彈跳;
+  // 之後進度再前進時這一格的樣式不變,動畫不會重播,也不會被下一格打斷
   collected: {
     color: '#ff5fa2',
     textShadow: '0 0 10px rgba(255, 95, 162, 0.55)',
+    animation: `hud-collected ${FEEDBACK_SECONDS}s ease-out`,
   },
   next: {
     color: '#e0577d',
@@ -157,7 +173,7 @@ const styles = {
     whiteSpace: 'nowrap',
     boxShadow: '0 6px 20px rgba(224, 87, 125, 0.4)',
     opacity: 0,
-    animation: 'hud-door-opened 3s ease-out forwards',
+    animation: `hud-door-opened 3s ease-out ${FEEDBACK_SECONDS}s forwards`,
   },
   wrong: {
     padding: '10px 24px',
