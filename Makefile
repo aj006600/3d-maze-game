@@ -1,12 +1,8 @@
 # 專案名:compose project 名與本機 image 名都從這裡來
 APP_NAME := 3d-maze-game
 
-# CI 推到 ghcr.io/<owner>/<repo>:repo 名與 APP_NAME 不同時改這行
-IMAGE ?= ghcr.io/aj006600/$(APP_NAME)
-
-LOCAL := -f compose.yaml -f compose.local.yaml
 # shell 裡殘留的 COMPOSE_PROJECT_NAME 會蓋掉「project 名取目錄名」:所有 worktree 擠進同一組 container,
-# worktree-rm 也收不到正確的那組。一律不帶給 compose(deploy / down 在 recipe 裡自己明寫)
+# worktree-rm 也收不到正確的那組。一律不帶給 compose
 unexport COMPOSE_PROJECT_NAME
 
 # 本機 build 的 image tag 帶 checkout 目錄名:多個 worktree 同時 make local / make test 才不會搶同一個名字、
@@ -19,20 +15,7 @@ DEV_IMAGE := $(APP_NAME):$(LOCAL_TAG)
 # 專案 label 只寫在 Dockerfile,這裡解析:make clean 以它劃定範圍,刪不到別的專案的東西
 PROJECT_LABEL := $(shell sed -n 's/^LABEL *\(org\.opencontainers\.image\.title=[^ ]*\).*/\1/p' Dockerfile | tr -d '"' | sort -u)
 
-# 註解勿寫同行:Make 會把 # 前的空白吃進變數值
-ENV ?= dev
-
-ENVS    := dev qas prd
-# 這個檔由主機自備、不進版控,compose 從它讀 HTTP_PORT 來插值
-ENV_FILE := .env.$(ENV)
-STACK   := -f compose.yaml -f compose.deploy.yaml --env-file $(ENV_FILE)
-PROJECT := COMPOSE_PROJECT_NAME=$(APP_NAME)-$(ENV) APP_NAME=$(APP_NAME)
-
-guard = @test -n "$(filter $(ENV),$(ENVS))" || { echo "ENV=$(ENV) 無效。可用:dev | qas | prd"; exit 1; }
-# TAG 不給預設值:要拉哪個 Release 得寫出來
-guard-tag = @test -n "$(TAG)" || { echo "TAG 必填。例:make deploy ENV=$(ENV) TAG=v1.2.0"; exit 1; }
-
-.PHONY: help local local-down compose test lint format deploy down ps clean worktree worktree-rm
+.PHONY: help local local-down compose test lint format ps clean worktree worktree-rm
 
 help:
 	@echo "Local(在你的開發機上)"
@@ -43,10 +26,6 @@ help:
 	@echo "  make lint | format                ESLint / Prettier(就地改檔)"
 	@echo "  make clean                        回收本專案的 container / volume / network、image 與 build cache"
 	@echo ""
-	@echo "Deployment(在目標主機上,需自備 .env.<env>)"
-	@echo "  make deploy ENV=<dev|qas|prd> TAG=<vX.Y.Z> 拉該 Release 並啟動(不重 build,TAG 必填)"
-	@echo "  make down   ENV=<env>                      停止該環境"
-	@echo ""
 	@echo "Inspection"
 	@echo "  make ps                           正在跑的 container(名稱 / 狀態 / 埠)"
 	@echo ""
@@ -55,19 +34,19 @@ help:
 	@echo "  make worktree-rm ISSUE=<n>                   刪掉該 worktree、本地 branch 與它的 container / volume(有未 commit 或未 push 的就拒絕)"
 
 # ── Local ──
-# 先 down 再 up:node_modules 的匿名 volume 跟著舊 container 一起刪掉(理由見 compose.local.yaml)。
+# 先 down 再 up:node_modules 的匿名 volume 跟著舊 container 一起刪掉(理由見 compose.yaml)。
 # --renew-anon-volumes 也會換一個新的 volume,但舊的會留下來變成沒人用的 volume
 local:
-	docker compose $(LOCAL) down --volumes
-	APP_NAME=$(APP_NAME) TAG=$(LOCAL_TAG) docker compose $(LOCAL) up --build
+	docker compose down --volumes
+	APP_NAME=$(APP_NAME) TAG=$(LOCAL_TAG) docker compose up --build
 
 # --volumes 只收 node_modules 的匿名 volume,裡面沒有要留的東西
 local-down:
-	docker compose $(LOCAL) down --volumes
+	docker compose down --volumes
 
-# 帶同一組 -f 與 TAG:手打 docker compose 少了 TAG 會 build 成 :latest,跟 make local 用的不是同一顆 image
+# 帶同一個 TAG:手打 docker compose 少了 TAG 會 build 成 :latest,跟 make local 用的不是同一顆 image
 compose:
-	APP_NAME=$(APP_NAME) TAG=$(LOCAL_TAG) docker compose $(LOCAL) $(ARGS)
+	APP_NAME=$(APP_NAME) TAG=$(LOCAL_TAG) docker compose $(ARGS)
 
 # ── Tests and quality ──
 # 與 CI 的 test job 同一個 dev stage。這裡不經 compose:這些 container 跑完就丟,用不到 make local 那組設定。
@@ -98,23 +77,12 @@ format:
 # 別的專案同樣沒人用的 cache 也會一起丟,它們下次 build 慢一點,不會壞
 clean:
 	@[ $(words $(PROJECT_LABEL)) = 1 ] || { echo "Dockerfile 的 image.title LABEL 解析不出唯一值:'$(PROJECT_LABEL)'" >&2; exit 1; }
-	docker compose $(LOCAL) down --volumes --remove-orphans
+	docker compose down --volumes --remove-orphans
 	docker image ls --filter label=$(PROJECT_LABEL) --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>' | xargs -r docker image rm
 	docker image prune -f --filter label=$(PROJECT_LABEL)
 	docker builder prune --force
 
-# ── Deployment ──
-# 刻意沒有「本機 build 後部署」的 target:在主機上重 build 會破壞「dev 測過的就是上 prod 的那顆」。
-deploy:
-	$(guard)
-	$(guard-tag)
-	IMAGE=$(IMAGE) TAG=$(TAG) $(PROJECT) docker compose $(STACK) pull
-	IMAGE=$(IMAGE) TAG=$(TAG) $(PROJECT) docker compose $(STACK) up -d --no-build
-
-down:
-	$(guard)
-	$(PROJECT) docker compose $(STACK) down
-
+# ── Inspection ──
 ps:
 	docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 
@@ -151,5 +119,5 @@ worktree-rm:
 		echo "$$branch 有 origin 上沒有的 commit,先 push 再刪:" >&2; \
 		echo "$$unpushed" >&2; exit 1; \
 	fi; \
-	docker compose -p $(notdir $(WORKTREE)) $(LOCAL) down --volumes --remove-orphans && \
+	docker compose -p $(notdir $(WORKTREE)) down --volumes --remove-orphans && \
 	git worktree remove $(WORKTREE) && git branch -D $$branch

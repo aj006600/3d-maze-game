@@ -2,9 +2,6 @@
 **/node_modules/
 **/dist/
 
-# env 檔一律不進版控(主機的 .env.<env>),只有範本例外
-.env*
-!.env.example
 *.secret
 .DS_Store
 

@@ -74,7 +74,7 @@ make compose ARGS="logs -f app"      # 追 dev server 的 log
 make compose ARGS="exec app sh"      # 進容器
 ```
 
-`make compose` 對 `make local` 那組 container 下任何 compose 子命令,帶的是同一組 compose 檔與 image tag。
+`make compose` 對 `make local` 那組 container 下任何 compose 子命令,帶的是同一個 image tag。
 
 ## Cleanup
 
@@ -103,9 +103,6 @@ build 出來的每顆 image 都帶著它,連重 build 後沒名字(`<none>`)的�
 **什麼時候跑**:磁碟告警的時候,或改完 `Dockerfile` / `package-lock.json` 想確認從乾淨狀態 build 得起來。
 日常收工用 `make local-down` 就好——它只收 container、network 與 volume,留 image,下次 `make local` 才起得快;
 `make clean` 之後的第一次 `make local` 要從頭 build,會等好幾分鐘。
-
-同一台機器上還有 `make deploy` 起的環境時,先 `make down ENV=<env>`:那些 image 也帶 label,
-container 還在就刪不掉,`make clean` 會停在那一步。`make down` 之後再跑一次就好。
 
 ## Parallel Development (worktree)
 
