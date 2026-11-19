@@ -18,4 +18,6 @@ const style = {
   fontFamily: 'inherit',
   fontSize: 'inherit',
   textAlign: 'center',
+  // 「滑鼠左鍵」這種好幾個字的按鍵名稱,在鍵帽裡折行就不像一顆鍵
+  whiteSpace: 'nowrap',
 }

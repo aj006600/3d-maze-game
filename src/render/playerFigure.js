@@ -1,14 +1,19 @@
-// 主角的人:一位穿制服的空服員,左手一直拉著登機箱。用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,
-// 不使用模型、動畫或圖片素材檔;腰帶的虎紋也是在程式裡畫出來的貼圖。
+// 主角的人:一位穿制服的空服員,平常用左手拉著登機箱,揮擊時雙手握著拉桿把登機箱揮出去。
+// 用長方體與多面體拼成的低多邊形造型,跑步與揮擊的動作由程式計算,不使用模型、動畫或圖片素材檔;
+// 腰帶的虎紋也是在程式裡畫出來的貼圖。
 // 這裡只負責外觀、擺放與動作;主角在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的狀態告訴它。
 // 鏡頭大多在主角背後,所以背影的辨識度優先:後腦那條帶著收邊的直立髮捲(法式包頭)、腰帶右側的蝴蝶結與兩條帶尾。
 import {
   BoxGeometry,
+  CylinderGeometry,
   DoubleSide,
+  Euler,
   Group,
   IcosahedronGeometry,
   MathUtils,
+  Matrix4,
   MeshStandardMaterial,
+  Quaternion,
   SphereGeometry,
   Vector3,
 } from 'three'
@@ -44,6 +49,8 @@ const BELT = { y: 0.21, width: 0.33, height: 0.07, depth: 0.22 }
 const ARM = { width: 0.1, depth: 0.11, sleeve: 0.36, length: 0.52, splay: 0.14 }
 // 手掌中心離肩關節的距離,沿著手臂往下量
 const HAND_REACH = ARM.length + 0.05
+// 手肘離肩關節的距離。手肘落在袖子裡,彎起來時袖子在這裡折成上下兩截
+const ELBOW = 0.26
 // 頭是一顆橢球,radii 是 x、y、z 三個方向的半徑,y 是中心的高度
 const HEAD = { radii: [0.165, 0.19, 0.175], y: 0.83 }
 // 髮蓋是一塊球殼,軸心從頭頂往後倒 tilt,從軸心往外蓋到 coverage 的角度。
@@ -74,7 +81,9 @@ const STRIDE_LENGTH = 1.8
 const LEG_SWING = 0.9
 const ARM_SWING = 0.8
 const BOB_HEIGHT = 0.08
+// 跑步時上半身繞髖關節往前傾的角度。繞 x 軸轉負的角度是往前(-z)傾
 const FORWARD_LEAN = 0.15
+const LEAN_AXIS = new Vector3(1, 0, 0)
 
 // 左手一直握著登機箱的拉桿,不跟著跑步前後擺動。
 // - splay 是左手臂往外張的角度。登機箱的握把在箱子正中間,手要張到半個箱寬落在左腿外側,箱子才不會插進左腿。
@@ -89,18 +98,72 @@ const CARRY = { splay: 0.32, pullBack: 0.45, tilt: (35 * Math.PI) / 180 }
 // 左手仍然握著拉桿,登機箱留在地上:跳起來時拉桿跟著手的高度伸長
 const CHEER = { armRaise: 2.75, raise: 0.15, lower: 0.6, hopFrom: 0.1, hopTo: 0.55, hopHeight: 0.2 }
 
+/** 揮擊的進度到這裡時,登機箱正好往下甩過主角身體的前方。揮擊的動作照這個時間點編排。 */
+export const SWING_STRIKE = 0.5
+
+// 揮擊:左手先把登機箱沿著身體左側往前盪起來,右手跟著握上拉桿,雙手把箱子舉到右肩上方再往左下揮出去,
+// 最後箱子沿著左側盪回來,回到平常的姿勢。揮的力量從軀幹來:舉起時往右扭、往後仰,把力量蓄起來,
+// 在最高點停一下,再一口氣轉向左邊、往前彎著揮下去,揮到底之後停一下,才收回來。
+// 揮擊的姿勢蓋過平常姿勢的程度,兩隻手各自從開頭漸強到 riseEnd、從 fallStart 漸弱到結尾,都是整次揮擊的幾分之幾。
+// 左手一直握著拉桿,所以比右手早握上、晚放開。handGap 是兩手的手掌中心在握把上隔多遠
+const SWING = {
+  left: { riseEnd: 0.1, fallStart: 0.86 },
+  right: { riseEnd: 0.22, fallStart: 0.74 },
+  handGap: 0.11,
+}
+// 軀幹在腰帶的高度彎腰與扭腰,骨盆與腿不跟著轉,腿照樣播跑步或站立的動作。
+// 頭只跟著扭轉的 (1 - headCounter),臉大致朝著前方
+const SWING_BODY = { pivotY: BELT.y, headCounter: 0.6 }
+// 左手把箱子往前盪起來的姿勢,揮擊的開頭與結尾都經過它。拉桿只往前倒、不往內偏,箱子在腿旁邊時才一直留在左腿外側
+const SWING_PENDULUM = { grip: [-0.42, 0.12, -0.22], toward: [-0.12, -0.6, -0.8], body: [0, 0, 0] }
+const SWING_RAISED = { grip: [0.15, 0.55, -0.3], toward: [0.55, 0.75, 0.35] }
+const SWING_STRUCK = { grip: [-0.06, 0.22, -0.33], toward: [-0.6, -0.45, -0.65] }
+// 揮擊經過的姿勢。grip 與 toward 用上半身的座標描述:原點在髖關節,臉朝 -z,右手在 +x。軀幹轉動時它們跟著轉。
+// - at 是到達這個姿勢的時間點,是整次揮擊的幾分之幾。第一個之前停在第一個,最後一個之後停在最後一個。
+// - grip 是兩手之間、握把的中心。右手握著握把的時候,它離兩邊的肩關節都不能超過 HAND_REACH,否則手搆不到。
+// - toward 是從握把往箱子的方向,也就是拉桿伸出去的方向,不必是單位向量。
+// - body 是軀幹的 `[前後, 扭轉, 側彎]`,單位是弧度。前後為正是往後仰;扭轉為正是轉向左邊;側彎為正是上身倒向左邊。
+// 箱子掛在拉桿末端、離握把很遠。箱子只在髖部以上的高度經過身體前方,低於髖部時都在左腿外側,
+// 跑步時往前踢的腿才碰不到它。改姿勢之後要從背後、側面各看一次,確認箱子沒有穿過身體或地面。
+// 開始往下揮與揮到底的時間點要對稱地落在 SWING_STRIKE 的兩側,箱子才在那一刻正好甩過身體前方
+const SWING_POSES = [
+  { at: SWING.left.riseEnd, ...SWING_PENDULUM },
+  // 雙手在胸前,箱子平舉在左前方,高過跑步時往前踢的腿;軀幹開始往右扭
+  { at: SWING.right.riseEnd, grip: [-0.15, 0.4, -0.33], toward: [-0.3, -0.15, -0.95], body: [0, -0.2, 0] },
+  // 舉到右肩上方,箱子在右上方:軀幹往右扭、往後仰
+  { at: 0.36, ...SWING_RAISED, body: [0.12, -0.55, 0.08] },
+  // 在最高點停一下,讓人看得出接下來要往下揮
+  { at: 0.42, ...SWING_RAISED, body: [0.15, -0.62, 0.1] },
+  // 往左下揮到底,箱子甩到左前方:軀幹轉向左邊、往前彎
+  { at: 0.58, ...SWING_STRUCK, body: [-0.32, 0.38, 0.12] },
+  // 停在揮到底的姿勢,箱子的份量才看得出來
+  { at: SWING.right.fallStart, ...SWING_STRUCK, body: [-0.36, 0.42, 0.12] },
+  { at: SWING.left.fallStart, ...SWING_PENDULUM },
+].map(({ at, grip, toward, body }) => ({
+  at,
+  grip: new Vector3(...grip),
+  toward: new Vector3(...toward).normalize(),
+  body: new Vector3(...body),
+}))
+// 手肘彎向哪一側,用上半身的座標描述:往下、往外,稍微往後,和人雙手往前握東西時一樣
+const ELBOW_POLES = { left: new Vector3(-1, -1, 0.4), right: new Vector3(1, -1, 0.4) }
+
 /**
- * 建立主角的人與她左手拉著的登機箱,`object` 要由呼叫端加進場景。
+ * 建立主角的人與她平常用左手拉著的登機箱,`object` 要由呼叫端加進場景。
  *
  * 每一幀依序呼叫兩個方法:
  * - `place(position, heading)`:position 是世界座標地面上的 `{ x, z }`,heading 是遊戲核心的朝向。
- * - `animate(distance, dt, cameraPosition)`:distance 是這一幀在世界座標裡移動了多遠,倒退時是負的;
- *   dt 是經過幾秒;cameraPosition 是鏡頭這一幀在世界座標的位置。
+ * - `animate(distance, dt, cameraPosition, swingProgress)`:distance 是這一幀在世界座標裡移動了多遠,倒退時是負的;
+ *   dt 是經過幾秒;cameraPosition 是鏡頭這一幀在世界座標的位置;swingProgress 是遊戲核心的揮擊進度。
  *   有在移動就播跑步動作,登機箱跟著往後倒、拖在左後方;停下後很快回到站姿並保持靜止,登機箱直立在左側。
  *   登機箱的輪子依 distance 轉動,倒退時反轉;鏡頭離登機箱太近時,登機箱會暫時藏起來。
  *
+ * swingProgress 不是 null 時,手臂播揮擊的動作,腿照樣播跑步或站立的動作。
+ * 揮擊的動作只看 swingProgress,自己不計時,所以它不變時動作就停在那裡。
+ *
  * 收集成功時呼叫 `cheer()`:主角舉起右手、原地小跳一下,左手仍然握著登機箱,登機箱留在地上。
  * 歡呼還沒播完時又呼叫,第二次會等第一次播完再從頭播。動作由之後每一幀的 `animate` 推進。
+ * 歡呼與揮擊同時發生時,手臂照揮擊的動作擺,小跳照樣播。
  *
  * 只能在瀏覽器裡建立,因為虎紋貼圖要用 canvas 畫。
  * 用完必須呼叫 `dispose()` 釋放 geometry、material 與貼圖。
@@ -109,12 +172,23 @@ export function createPlayerFigure() {
   // 長方體與橢球共用單位大小的 geometry,靠 scale 決定大小;上下粗細不同的部位各自有一個 geometry
   const box = new BoxGeometry(1, 1, 1)
   const ball = new IcosahedronGeometry(1, 1)
+  // 手肘的關節是一段沿著 x 的圓柱,手肘彎起來時填住上下兩截袖子之間張開的縫
+  const elbowGeometry = new CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2)
   const pelvisGeometry = taperedBox(PELVIS.top - PELVIS.bottom, PELVIS.bottomSize, PELVIS.topSize)
   const waistGeometry = taperedBox(CHEST.y - WAIST.y, WAIST.size, CHEST.size)
   const chestGeometry = taperedBox(SHOULDER.y - CHEST.y, CHEST.size, SHOULDER.size)
   const collarGeometry = taperedBox(0.06, [0.13, 0.12], [0.11, 0.105])
   const hairGeometries = [...createHairCapGeometries(), ...Object.values(FRENCH_TWIST).map(createHairSwell)]
-  const geometries = [box, ball, pelvisGeometry, waistGeometry, chestGeometry, collarGeometry, ...hairGeometries]
+  const geometries = [
+    box,
+    ball,
+    elbowGeometry,
+    pelvisGeometry,
+    waistGeometry,
+    chestGeometry,
+    collarGeometry,
+    ...hairGeometries,
+  ]
 
   const tigerTexture = createTigerTexture()
   const materials = {
@@ -148,14 +222,8 @@ export function createPlayerFigure() {
   // 手臂往外張的角度見 ARM 與 CARRY。Euler 的順序是先繞 z 再繞 x:先往外張,前後擺動時才不會改變往外張的角度
   const shoulderX = SHOULDER.size[0] / 2 + ARM.width / 2
   const shoulderY = SHOULDER.y - 0.04
-  const leftArm = joint(-shoulderX, shoulderY, ...armParts(box, materials))
-  const rightArm = joint(shoulderX, shoulderY, ...armParts(box, materials))
-  leftArm.rotation.z = -CARRY.splay
-  rightArm.rotation.z = ARM.splay
-  // 左手掌的中心,登機箱的握把就擺在這一點
-  const leftHand = new Group()
-  leftHand.position.y = -HAND_REACH
-  leftArm.add(leftHand)
+  const leftArm = createArm(-shoulderX, shoulderY, box, elbowGeometry, materials)
+  const rightArm = createArm(shoulderX, shoulderY, box, elbowGeometry, materials)
 
   const head = new Group()
   head.position.y = HEAD.y
@@ -167,8 +235,10 @@ export function createPlayerFigure() {
 
   // 上半身的原點在髖部,前傾時繞髖部轉,腿不會跟著傾斜
   const upperBody = new Group()
+  const pelvis = part(pelvisGeometry, materials.pants, [1, 1, 1], [0, (PELVIS.bottom + PELVIS.top) / 2, 0])
+  const pelvisRest = pelvis.position.clone()
   upperBody.add(
-    part(pelvisGeometry, materials.pants, [1, 1, 1], [0, (PELVIS.bottom + PELVIS.top) / 2, 0]),
+    pelvis,
     // 襯衫的下襬紮進褲子,接縫藏在腰帶底下
     part(waistGeometry, materials.shirt, [1, 1, 1], [0, (WAIST.y + CHEST.y) / 2, 0]),
     part(chestGeometry, materials.shirt, [1, 1, 1], [0, (CHEST.y + SHOULDER.y) / 2, 0]),
@@ -178,8 +248,8 @@ export function createPlayerFigure() {
     part(box, materials.nameTag, [0.085, 0.03, 0.012], [-0.09, 0.43, -CHEST.size[1] / 2]),
     part(box, materials.skin, [0.09, 0.2, 0.085], [0, SHOULDER.y + 0.04, 0]),
     ...collarParts(box, collarGeometry, materials),
-    leftArm,
-    rightArm,
+    leftArm.shoulder,
+    rightArm.shoulder,
     head,
   )
 
@@ -194,6 +264,32 @@ export function createPlayerFigure() {
   const runCycle = createRunCycle(STRIDE_LENGTH)
   const cheerClip = createFeedbackClip()
   const grip = new Vector3()
+  const swingGrip = new Vector3()
+  const direction = new Vector3()
+  const across = new Vector3()
+  const rightDirection = new Vector3()
+  const rightAcross = new Vector3()
+  const handTarget = new Vector3()
+  const bodyAngles = new Vector3()
+  const bodyEuler = new Euler(0, 0, 0, 'YXZ')
+  const bodyTurn = new Quaternion()
+  const pelvisTurn = new Quaternion()
+  const leanTurn = new Quaternion()
+  const waistPivot = new Vector3(0, SWING_BODY.pivotY, 0)
+  const pivotShift = new Vector3()
+  // 這次歡呼舉起右手的程度還剩幾成,見 animate 裡的說明
+  let cheerHand = 1
+  const swing = { direction: new Vector3(), across: new Vector3(), weight: 0 }
+  const restQuaternion = new Quaternion()
+  const reachQuaternion = new Quaternion()
+
+  // 把手臂從平常的姿勢往「手掌中心落在 target」的姿勢擺過去,weight 是擺過去的程度。座標都是上半身的座標
+  function blendReach(arm, target, pole, weight) {
+    restQuaternion.copy(arm.shoulder.quaternion)
+    const bend = solveReach(arm.shoulder.position, target, pole, reachQuaternion)
+    arm.shoulder.quaternion.slerpQuaternions(restQuaternion, reachQuaternion, weight)
+    arm.elbow.rotation.x = bend * weight
+  }
 
   return {
     object,
@@ -203,27 +299,79 @@ export function createPlayerFigure() {
     cheer() {
       cheerClip.play()
     },
-    animate(distance, dt, cameraPosition) {
+    animate(distance, dt, cameraPosition, swingProgress) {
       const { phase, blend } = runCycle.advance(Math.abs(distance), dt)
       const feedback = cheerClip.advance(dt)
-      const swing = Math.sin(phase) * blend
-      leftLeg.rotation.x = swing * LEG_SWING
-      rightLeg.rotation.x = -swing * LEG_SWING
-      // 右手舉起來時不再跟著跑步前後擺動
-      const raise = raiseOf(feedback)
-      rightArm.rotation.x = swing * ARM_SWING * (1 - raise)
-      rightArm.rotation.z = ARM.splay + (CHEER.armRaise - ARM.splay) * raise
-      // 每跨一步身體起伏一次,所以用 |sin|;繞 x 軸轉負的角度是往前(-z)傾
+      const stride = Math.sin(phase) * blend
+      leftLeg.rotation.x = stride * LEG_SWING
+      rightLeg.rotation.x = -stride * LEG_SWING
+      // 每跨一步身體起伏一次,所以用 |sin|
       const bob = Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
       hips.position.y = HIP_HEIGHT + bob + hopOf(feedback, CHEER.hopFrom, CHEER.hopTo) * CHEER.hopHeight
-      upperBody.rotation.x = -FORWARD_LEAN * blend
       // 登機箱的姿勢用緩入緩出的強度,起跑與停下時箱子才不會猛然倒下或立起來
-      const carry = blend * blend * (3 - 2 * blend)
-      leftArm.rotation.x = -CARRY.pullBack * carry
-      // 全身擺好之後才量得到左手在哪裡,登機箱再依手的位置擺上去
-      leftHand.getWorldPosition(grip)
+      const carry = easeInOut(blend)
+
+      const leftWeight = envelopeOf(swingProgress, SWING.left.riseEnd, SWING.left.fallStart)
+      const rightWeight = envelopeOf(swingProgress, SWING.right.riseEnd, SWING.right.fallStart)
+      if (leftWeight > 0) swingPoseOf(swingProgress, swingGrip, direction, bodyAngles)
+      else bodyAngles.set(0, 0, 0)
+      bodyAngles.multiplyScalar(leftWeight)
+
+      // 跑步的前傾繞髖關節轉,揮擊的彎腰與扭腰繞腰轉。上半身的原點在髖關節,所以繞腰轉時原點要跟著挪
+      bodyTurn.setFromEuler(bodyEuler.set(bodyAngles.x, bodyAngles.y, bodyAngles.z))
+      leanTurn.setFromAxisAngle(LEAN_AXIS, -FORWARD_LEAN * blend)
+      upperBody.quaternion.multiplyQuaternions(leanTurn, bodyTurn)
+      pivotShift.copy(waistPivot).applyQuaternion(bodyTurn)
+      upperBody.position.subVectors(waistPivot, pivotShift).applyQuaternion(leanTurn)
+      // 骨盆抵銷彎腰與扭腰,留在腿上,只跟著跑步前傾
+      pelvisTurn.copy(bodyTurn).invert()
+      pelvis.quaternion.copy(pelvisTurn)
+      pelvis.position.subVectors(pelvisRest, waistPivot).applyQuaternion(pelvisTurn).add(waistPivot)
+      head.rotation.y = -bodyAngles.y * SWING_BODY.headCounter
+      // 歡呼時揮擊,舉起的右手隨著右手握上拉桿放下來,這次歡呼剩下的時間都不再舉起。
+      // 揮完時若讓右手回到舉高的位置,手臂從左下方轉回頭頂的途中會穿過頭
+      if (feedback === null) cheerHand = 1
+      else cheerHand = Math.min(cheerHand, 1 - rightWeight)
+
+      // 先擺平常的姿勢。三個角度都要設:揮擊時直接換掉手臂的方向,沒設到的角度會留著上一幀揮擊的值。
+      // 右手舉起來時不再跟著跑步前後擺動
+      const raise = envelopeOf(feedback, CHEER.raise, CHEER.lower) * cheerHand
+      rightArm.shoulder.rotation.set(
+        stride * ARM_SWING * (1 - raise),
+        0,
+        ARM.splay + (CHEER.armRaise - ARM.splay) * raise,
+      )
+      leftArm.shoulder.rotation.set(-CARRY.pullBack * carry, 0, -CARRY.splay)
+      leftArm.elbow.rotation.x = 0
+      rightArm.elbow.rotation.x = 0
+
+      // 揮擊時兩隻手往握把伸過去,蓋過平常的姿勢。右手的程度只會比左手小
+      if (leftWeight > 0) {
+        acrossOf(direction, across)
+        handTarget.copy(swingGrip).addScaledVector(across, -SWING.handGap / 2)
+        blendReach(leftArm, handTarget, ELBOW_POLES.left, leftWeight)
+      }
+      if (rightWeight > 0) {
+        // 右手還沒握上與放開之後,伸向握上與放開那一刻的握把。
+        // 箱子在左腿旁時,握把在右手搆不到的地方;伸向那裡的話,伸直的右手會從肚子前面橫過去
+        const reachAt = MathUtils.clamp(swingProgress, SWING.right.riseEnd, SWING.right.fallStart)
+        swingPoseOf(reachAt, handTarget, rightDirection)
+        handTarget.addScaledVector(acrossOf(rightDirection, rightAcross), SWING.handGap / 2)
+        blendReach(rightArm, handTarget, ELBOW_POLES.right, rightWeight)
+      }
+
+      // 全身擺好之後才量得到手在哪裡,登機箱再依手的位置擺上去。
+      // 左手一直握著拉桿:平常握在握把的中心,揮擊時握在握把偏左的地方,讓出右邊給右手。
+      // 拉桿與橫桿的方向要從上半身的座標換到主角造型的座標
+      leftArm.hand.getWorldPosition(grip)
       object.worldToLocal(grip)
-      suitcase.pose(grip, CARRY.tilt * carry)
+      if (leftWeight > 0) {
+        swing.direction.copy(direction).applyQuaternion(upperBody.quaternion)
+        swing.across.copy(across).applyQuaternion(upperBody.quaternion)
+        swing.weight = leftWeight
+        grip.addScaledVector(swing.across, (SWING.handGap / 2) * leftWeight)
+      }
+      suitcase.pose(grip, CARRY.tilt * carry, leftWeight > 0 ? swing : null)
       suitcase.roll(distance)
       suitcase.hideNear(cameraPosition)
     },
@@ -236,13 +384,81 @@ export function createPlayerFigure() {
   }
 }
 
-// 歡呼時右手舉起的程度,0 是平常的位置、1 是舉到最高。feedback 是歡呼播到哪裡,沒有在播時是 null。
-// 舉起與放下都頭尾放慢,手才不會突然停住
-function raiseOf(feedback) {
-  if (feedback === null) return 0
-  if (feedback < CHEER.raise) return easeInOut(feedback / CHEER.raise)
-  if (feedback < CHEER.lower) return 1
-  return easeInOut((1 - feedback) / (1 - CHEER.lower))
+/**
+ * 一段動作蓋過平常姿勢的程度,0 是平常的姿勢、1 是完全照這段動作擺。
+ *
+ * progress 是這段動作播到哪裡,0 是開頭、1 是結尾,沒有在播時是 null。
+ * 從開頭到 riseEnd 漸強,停到 fallStart 開始漸弱,播完時剛好回到 0。漸強與漸弱都頭尾放慢,手才不會突然停住。
+ */
+function envelopeOf(progress, riseEnd, fallStart) {
+  if (progress === null) return 0
+  if (progress < riseEnd) return easeInOut(progress / riseEnd)
+  if (progress < fallStart) return 1
+  return easeInOut((1 - progress) / (1 - fallStart))
+}
+
+// 揮擊在 progress 這一刻的握把中心與拉桿方向寫進 grip 與 direction,座標是上半身的座標;
+// 有給 body 時,軀幹的 `[前後, 扭轉, 側彎]` 寫進它的 x、y、z。
+// 相鄰兩個姿勢之間頭尾放慢:握把走直線,拉桿的方向沿著兩個方向之間最短的弧轉過去
+function swingPoseOf(progress, grip, direction, body = null) {
+  const next = SWING_POSES.findIndex(({ at }) => at > progress)
+  if (next === 0 || next === -1) {
+    const held = SWING_POSES.at(next)
+    grip.copy(held.grip)
+    direction.copy(held.toward)
+    body?.copy(held.body)
+    return
+  }
+  const from = SWING_POSES[next - 1]
+  const to = SWING_POSES[next]
+  const t = easeInOut((progress - from.at) / (to.at - from.at))
+  grip.lerpVectors(from.grip, to.grip, t)
+  poseScratch.turn.setFromUnitVectors(from.toward, to.toward)
+  direction.copy(from.toward).applyQuaternion(poseScratch.partial.identity().slerp(poseScratch.turn, t))
+  body?.lerpVectors(from.body, to.body, t)
+}
+const poseScratch = { turn: new Quaternion(), partial: new Quaternion() }
+
+// 握把橫桿的方向,寫進 across 並回傳 across:取身體的左右方向扣掉沿著拉桿的分量,橫桿才與拉桿垂直
+function acrossOf(direction, across) {
+  return across.set(1, 0, 0).addScaledVector(direction, -direction.x).normalize()
+}
+
+/**
+ * 把一隻手臂擺成手掌中心落在 target,手肘彎向 pole 那一側。座標都是上半身的座標,與肩關節的 position 相同。
+ *
+ * 肩關節要轉成的方向寫進 quaternion,回傳手肘要彎的角度,也就是手肘 rotation.x 的值。
+ * target 搆不到時手臂伸直,朝 target 指過去。pole 不必是單位向量,但不能與肩關節到 target 的方向平行。
+ */
+function solveReach(shoulder, target, pole, quaternion) {
+  const upper = ELBOW
+  const lower = HAND_REACH - ELBOW
+  const { toTarget, side, upperDirection, xAxis, yAxis, zAxis, basis } = reachScratch
+  toTarget.subVectors(target, shoulder)
+  const distance = MathUtils.clamp(toTarget.length(), Math.abs(upper - lower) + 1e-4, upper + lower - 1e-4)
+  const aim = toTarget.normalize()
+  // 手肘落在 aim 與 pole 撐出的平面上、偏向 pole 的那一側
+  side.copy(pole).addScaledVector(aim, -pole.dot(aim)).normalize()
+  // 上臂、前臂與肩關節到 target 圍成三角形,用餘弦定理求肩關節與手肘的夾角
+  const cosShoulder = (upper ** 2 + distance ** 2 - lower ** 2) / (2 * upper * distance)
+  const sinShoulder = Math.sqrt(1 - cosShoulder ** 2)
+  upperDirection.copy(aim).multiplyScalar(cosShoulder).addScaledVector(side, sinShoulder)
+  // 肩關節的座標軸:-y 沿著上臂往下,-z 是前臂彎過去的那一側,也就是背離 pole、朝向 target 的那一側
+  yAxis.copy(upperDirection).negate()
+  zAxis.copy(aim).multiplyScalar(-sinShoulder).addScaledVector(side, cosShoulder)
+  xAxis.crossVectors(yAxis, zAxis)
+  quaternion.setFromRotationMatrix(basis.makeBasis(xAxis, yAxis, zAxis))
+  const cosElbow = (upper ** 2 + lower ** 2 - distance ** 2) / (2 * upper * lower)
+  return Math.PI - Math.acos(MathUtils.clamp(cosElbow, -1, 1))
+}
+const reachScratch = {
+  toTarget: new Vector3(),
+  side: new Vector3(),
+  upperDirection: new Vector3(),
+  xAxis: new Vector3(),
+  yAxis: new Vector3(),
+  zAxis: new Vector3(),
+  basis: new Matrix4(),
 }
 
 // 一條腿:從髖關節往下到腳踝的直筒褲管,加上黑色低跟鞋。原點在髖關節
@@ -258,17 +474,45 @@ function legParts(box, materials) {
   ]
 }
 
-// 一隻手臂:七分袖蓋到前臂的一半,袖口往上反摺成一圈較寬的邊,底下露出前臂與手。原點在肩關節
-function armParts(box, materials) {
+/**
+ * 一隻手臂:七分袖蓋到前臂的一半,袖口往上反摺成一圈較寬的邊,底下露出前臂與手。
+ *
+ * 回傳三個 Group:
+ * - shoulder 是肩關節,擺在上半身的 `(x, y, 0)`。轉它就是轉整隻手臂。
+ * - elbow 是手肘,繞自己的 x 軸轉正的角度時,前臂往 -z 彎。
+ * - hand 是手掌的中心,只用來量位置。
+ */
+function createArm(x, y, box, elbowGeometry, materials) {
   // 袖子從肩關節往上多蓋一點,包住肩膀的頂端
   const sleeveTop = 0.03
   const forearm = ARM.length - ARM.sleeve
-  return [
-    part(box, materials.shirt, [ARM.width, ARM.sleeve + sleeveTop, ARM.depth], [0, (sleeveTop - ARM.sleeve) / 2, 0]),
-    part(box, materials.shirt, [ARM.width + 0.025, 0.05, ARM.depth + 0.025], [0, -ARM.sleeve + 0.02, 0]),
-    part(box, materials.skin, [ARM.width - 0.025, forearm, ARM.depth - 0.025], [0, -ARM.sleeve - forearm / 2, 0]),
-    part(box, materials.skin, [0.075, 0.1, 0.09], [0, -HAND_REACH, 0]),
-  ]
+  const lowerSleeve = ARM.sleeve - ELBOW
+  const shoulder = new Group()
+  shoulder.position.set(x, y, 0)
+  shoulder.add(part(box, materials.shirt, [ARM.width, ELBOW + sleeveTop, ARM.depth], [0, (sleeveTop - ELBOW) / 2, 0]))
+
+  // 手肘以下的部位以手肘為原點
+  const elbow = new Group()
+  elbow.position.y = -ELBOW
+  const hand = new Group()
+  hand.position.y = ELBOW - HAND_REACH
+  // 關節的圓柱比袖子細一點,手臂伸直時整個藏在袖子裡
+  const jointSize = [ARM.width - 0.002, ARM.depth / 2 - 0.001, ARM.depth / 2 - 0.001]
+  elbow.add(
+    part(elbowGeometry, materials.shirt, jointSize, [0, 0, 0]),
+    part(box, materials.shirt, [ARM.width, lowerSleeve, ARM.depth], [0, -lowerSleeve / 2, 0]),
+    part(box, materials.shirt, [ARM.width + 0.025, 0.05, ARM.depth + 0.025], [0, ELBOW - ARM.sleeve + 0.02, 0]),
+    part(
+      box,
+      materials.skin,
+      [ARM.width - 0.025, forearm, ARM.depth - 0.025],
+      [0, ELBOW - ARM.sleeve - forearm / 2, 0],
+    ),
+    part(box, materials.skin, [0.075, 0.1, 0.09], [0, ELBOW - HAND_REACH, 0]),
+    hand,
+  )
+  shoulder.add(elbow)
+  return { shoulder, elbow, hand }
 }
 
 /**
