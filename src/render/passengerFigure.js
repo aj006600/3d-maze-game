@@ -11,25 +11,27 @@ const SHORTS_COLOR = '#3a6fd8'
 const FUR_COLOR = '#9d948c'
 const DARK_COLOR = '#1c1918'
 
-// 各部位的尺寸,單位與世界座標相同。整個人含耳朵大約 1.9 高,與主角差不多。
+// 各部位的尺寸,單位與世界座標相同。整個人含耳朵大約 2.6 高,比主角高大一圈。
+// 攤開的雙手大約和碰撞的圓一樣寬,看起來幾乎塞滿走道,撞上去時才不會像撞上一道看不見的牆;
+// 改了設定模組裡奧客的碰撞半徑,要跟著調整軀幹的寬度與手臂往外張的角度。
 // 髖關節以上的部位以髖關節為原點,臉朝 -z,右手在 +x
-const HIP_HEIGHT = 0.85
+const HIP_HEIGHT = 1.05
 // length 是髖關節到地面的長度;shorts 是褲管從髖關節往下蓋多長
-const LEG = { width: 0.17, depth: 0.18, length: HIP_HEIGHT, spacing: 0.12, shorts: 0.38 }
-const TORSO = { width: 0.52, height: 0.62, depth: 0.36 }
+const LEG = { width: 0.34, depth: 0.34, length: HIP_HEIGHT, spacing: 0.32, shorts: 0.55 }
+const TORSO = { width: 1.3, height: 0.9, depth: 0.85 }
 // 肚子從軀幹的正面往前凸出 depth
-const BELLY = { width: 0.44, height: 0.34, depth: 0.16, y: 0.2 }
+const BELLY = { width: 1.1, height: 0.6, depth: 0.45, y: 0.3 }
 // splay 是手臂往外張的角度
-const ARM = { width: 0.12, length: 0.55, x: 0.33, y: 0.56, splay: 0.3 }
+const ARM = { width: 0.24, length: 0.9, x: 0.77, y: 0.8, splay: 0.85 }
 // 頭是一個方塊,尖嘴從臉的正面往前凸出
-const HEAD = { size: 0.32, y: TORSO.height + 0.2 }
-const SNOUT = { width: 0.14, height: 0.12, depth: 0.2, y: -0.05 }
+const HEAD = { size: 0.5, y: TORSO.height + 0.3 }
+const SNOUT = { width: 0.22, height: 0.18, depth: 0.3, y: -0.08 }
 
 // 跑完一個完整步伐循環(左右腳各跨一次)前進的距離。奧客用走的,步伐比主角跑步時小
-const STRIDE_LENGTH = 1.4
+const STRIDE_LENGTH = 1.8
 const LEG_SWING = 0.5
 const ARM_SWING = 0.4
-const BOB_HEIGHT = 0.03
+const BOB_HEIGHT = 0.04
 
 /**
  * 建立一位奧客的佔位人形,`object` 要由呼叫端加進場景。
@@ -87,11 +89,11 @@ export function createPassengerFigure() {
     part(box, materials.fur, [HEAD.size, HEAD.size, HEAD.size], [0, 0, 0]),
     part(box, materials.fur, [SNOUT.width, SNOUT.height, SNOUT.depth], [0, SNOUT.y, faceZ - SNOUT.depth / 2]),
     // 鼻頭在尖嘴的最前端
-    part(box, materials.dark, [0.06, 0.05, 0.03], [0, SNOUT.y + 0.03, faceZ - SNOUT.depth - 0.015]),
-    part(box, materials.dark, [0.05, 0.05, 0.02], [-0.08, 0.05, faceZ - 0.01]),
-    part(box, materials.dark, [0.05, 0.05, 0.02], [0.08, 0.05, faceZ - 0.01]),
-    part(box, materials.fur, [0.1, 0.12, 0.04], [-0.13, HEAD.size / 2 + 0.04, 0]),
-    part(box, materials.fur, [0.1, 0.12, 0.04], [0.13, HEAD.size / 2 + 0.04, 0]),
+    part(box, materials.dark, [0.09, 0.075, 0.045], [0, SNOUT.y + 0.045, faceZ - SNOUT.depth - 0.02]),
+    part(box, materials.dark, [0.075, 0.075, 0.03], [-0.12, 0.075, faceZ - 0.015]),
+    part(box, materials.dark, [0.075, 0.075, 0.03], [0.12, 0.075, faceZ - 0.015]),
+    part(box, materials.fur, [0.15, 0.18, 0.06], [-0.2, HEAD.size / 2 + 0.06, 0]),
+    part(box, materials.fur, [0.15, 0.18, 0.06], [0.2, HEAD.size / 2 + 0.06, 0]),
   )
 
   // 髖關節以上的部位一起隨步伐起伏
