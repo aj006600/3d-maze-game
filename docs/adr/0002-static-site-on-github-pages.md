@@ -28,7 +28,7 @@ repo 是從一個 fullstack 模板開始的,帶著一個後端與它的設定。
 - 退回舊版是對舊的 tag 重跑一次發佈的 workflow,從那個 tag 的原始碼重新 build 再發佈。以前「同一顆 image 一路往上推」的保證不在了。相依由 `package-lock.json` 固定,但 Node 的 base image 可能已經更新,所以重新 build 出來的檔案不保證與當初逐位元相同。
 - 只有一個環境,沒有 dev、qas、prd 之分。發版前的驗證在本機做,包括 build 出來的靜態檔放在子路徑底下打得開。
 - 網址是公開的,任何拿到網址的人都能玩,破關畫面的祝福文字也看得到。
-- repo 擁有者要做一次性的設定:Pages 的來源選 GitHub Actions,並讓 `github-pages` environment 接受 `v*` 的 tag。步驟在 `docs/deployment.md`。
+- repo 擁有者要做一次性的設定:Pages 的來源選 GitHub Actions,並讓 `github-pages` environment 接受 `v*.*.*` 的 tag。步驟在 `docs/deployment.md`。
 - Docker 仍是本機指令的唯一入口,CI 也在同一個 dev stage 裡跑測試。Dockerfile 只留開發與 build 用的 stage,外加一個只放靜態檔的 stage,讓 CI 把 build 的結果匯出給 Pages。
 - 遊戲的設定仍然集中在設定模組裡,是 build 時就固定的常數。沒有任何值要從環境變數讀,所以 `.env` 這套機制一併移除。
 - 重新評估的時機:遊戲需要伺服器端的功能(例如存檔或排行榜),或決定要包成桌面程式的時候。

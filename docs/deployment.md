@@ -46,7 +46,6 @@ gh run watch                             # 跟著看這次 run
 ```
 
 也可以在 GitHub 網頁上做:Actions → CI/CD → Run workflow,在「Use workflow from」的 Tags 裡選舊的版本。
-那個版本當初的 run 還在 30 天內的話,直接在那次 run 的頁面按 Re-run all jobs 也一樣。
 
 退回之後,`main` 上的新版不會自己回來。修好之後打一個新的 tag(例如 `v0.1.1`)發佈。
 
@@ -59,9 +58,10 @@ repo 擁有者在第一次發版前要做一次,都在 repo 的 Settings 裡:
    tag 上的 run 會在 `deploy` job 被擋下,錯誤訊息是
    `Tag "v0.1.0" is not allowed to deploy to github-pages due to environment protection rules`。
    到 Settings → Environments → `github-pages` → Deployment branches and tags,新增一條規則,Ref type 選 **Tag**,
-   pattern 填 `v*`。`main` 那條規則留著。
-   Environments 裡還沒有 `github-pages` 的話,先打第一個 tag 讓 run 建出它;`deploy` 被擋下後回來加規則,
-   再到那次 run 的頁面按 Re-run failed jobs。
+   pattern 填 `v*.*.*`。`main` 那條規則留著。
+   手動跑 workflow 時可以選任何 tag,這條規則讓不是 Release 形狀的 tag 發佈不出去。
+   Environments 裡還沒有 `github-pages` 的話,先打第一個 tag,run 會建出它。`deploy` 若被上面的錯誤擋下,
+   加好規則後用 Rollback 一節的 `gh workflow run ci-cd.yml --ref v0.1.0` 在同一個 tag 上重跑一次。
 3. **打第一個 tag**(見 Releasing),run 跑完後打開網址,從開始畫面玩到破關畫面。
 
 不用設任何 secret:發佈用的是 workflow 內建的 `GITHUB_TOKEN`。`deploy` job 需要的 `pages: write` 與

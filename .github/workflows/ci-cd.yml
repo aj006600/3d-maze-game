@@ -39,7 +39,7 @@ jobs:
         with:
           path: dist
 
-  # 測試沒過就不發佈:needs 兩個 job 都成功才跑
+  # 測試沒過就不發佈
   deploy:
     needs: [test, build]
     if: github.ref_type == 'tag'
@@ -47,7 +47,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    # github-pages environment 預設只允許 default branch 部署,要另外放行 v* 的 tag(見 docs/deployment.md)
+    # github-pages environment 預設只允許 default branch 部署,要另外放行 v*.*.* 的 tag(見 docs/deployment.md)
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

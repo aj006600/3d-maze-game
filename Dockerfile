@@ -18,7 +18,7 @@ FROM base AS build
 COPY . .
 RUN npm run build
 
-# site:只放 build 出來的靜態檔,不當 image 跑。
-# CI 用 docker build --output 把這個 stage 的內容匯出成目錄,再發佈到 GitHub Pages
+# site:只放要發佈的靜態檔,放在根目錄。它是 scratch,不能當 image 跑,
+# 要用 docker build --output 把內容匯出成目錄
 FROM scratch AS site
 COPY --from=build /app/dist /
