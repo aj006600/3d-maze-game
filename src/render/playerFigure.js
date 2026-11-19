@@ -1,12 +1,13 @@
 // 主角的人:一位穿制服的空服員,左手一直拉著登機箱。用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,
 // 不使用模型、動畫或圖片素材檔;腰帶的虎紋也是在程式裡畫出來的貼圖。
 // 這裡只負責外觀、擺放與動作;主角在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的狀態告訴它。
-// 鏡頭大多在主角背後,所以背影的辨識度優先:後腦的包頭、腰帶右側的蝴蝶結與兩條帶尾。
+// 鏡頭大多在主角背後,所以背影的辨識度優先:後腦那條帶著收邊的直立髮捲(法式包頭)、腰帶右側的蝴蝶結與兩條帶尾。
 import {
   BoxGeometry,
   DoubleSide,
   Group,
   IcosahedronGeometry,
+  MathUtils,
   MeshStandardMaterial,
   SphereGeometry,
   Vector3,
@@ -50,6 +51,23 @@ const HEAD = { radii: [0.165, 0.19, 0.175], y: 0.83 }
 // 球殼在分線那裡留一道 partGap 寬的縫,縫裡露出頭皮,就是側分的分線;partOffset 是分線從正前方往左偏的角度。
 // 縫從離軸心 partStart 的地方開到前緣,頭頂後方不開縫,從背後看才不像一道裂痕
 const HAIR_CAP = { tilt: 0.95, coverage: 1.66, partStart: 0.9, partGap: 0.06, partOffset: 0.45 }
+// 髮殼是髮蓋與髮捲共同貼著的橢球,比頭大一圈。半徑多出的那一點就是頭髮的厚度。
+// 中心相對於頭的中心稍微往上、往後挪
+const HAIR_SHELL = { radii: HEAD.radii.map((radius) => radius + 0.015), center: [0, 0.005, 0.005] }
+// 髮殼在頭頂後方往外撐起一個圓頂,就是盤髮的份量。圓頂的中心在髮蓋的軸心上,那裡的半徑多撐出 lift 倍,
+// 離中心 reach 的角度收平。頭頂離軸心 tilt 的角度,reach 要比它小一截,圓頂才不會墊高總身高
+const HAIR_DOME = { lift: 0.15, reach: 0.85 }
+// 法式包頭的髮捲由兩片貼在髮殼上的鼓起並排而成,每一片都像一片兩端尖、中間寬的葉子。位置用髮殼上的角度描述:
+// - from 與 to 是上緣與下緣離頭頂的角度,往後量。上緣在頭頂後方,下緣在後頸,不超過髮蓋的後緣。
+// - side 是這一片的中線往右(+x)偏的角度,spread 是從中線往左右各蓋多寬的角度。
+// - height 是中央浮出髮殼的高度。四周沉進髮殼 sink 的深度,與髮蓋接得平順;兩端因此比 from 與 to 短一點才露出來。
+// 兩片交界的凹痕就是收邊
+const FRENCH_TWIST = {
+  // 一側的頭髮蓋過另一側捲進去的那一片,寬而厚,收邊在它的右緣
+  outer: { from: 0.72, to: 2.6, side: -0.02, spread: 0.27, height: 0.07, sink: 0.02 },
+  // 被蓋住的那一側,窄而薄,從收邊的右邊露出來
+  inner: { from: 0.95, to: 2.45, side: 0.2, spread: 0.14, height: 0.04, sink: 0.02 },
+}
 
 // 跑完一個完整步伐循環(左右腳各跨一次)前進的距離
 const STRIDE_LENGTH = 1.8
@@ -95,8 +113,8 @@ export function createPlayerFigure() {
   const waistGeometry = taperedBox(CHEST.y - WAIST.y, WAIST.size, CHEST.size)
   const chestGeometry = taperedBox(SHOULDER.y - CHEST.y, CHEST.size, SHOULDER.size)
   const collarGeometry = taperedBox(0.06, [0.13, 0.12], [0.11, 0.105])
-  const hairCapGeometries = createHairCapGeometries()
-  const geometries = [box, ball, pelvisGeometry, waistGeometry, chestGeometry, collarGeometry, ...hairCapGeometries]
+  const hairGeometries = [...createHairCapGeometries(), ...Object.values(FRENCH_TWIST).map(createHairSwell)]
+  const geometries = [box, ball, pelvisGeometry, waistGeometry, chestGeometry, collarGeometry, ...hairGeometries]
 
   const tigerTexture = createTigerTexture()
   const materials = {
@@ -141,7 +159,11 @@ export function createPlayerFigure() {
 
   const head = new Group()
   head.position.y = HEAD.y
-  head.add(...headParts(ball, hairCapGeometries, materials))
+  // 臉不做五官。頭髮的 geometry 都已經擺在頭的座標裡,不再縮放或移動
+  head.add(
+    part(ball, materials.skin, HEAD.radii, [0, 0, 0]),
+    ...hairGeometries.map((geometry) => part(geometry, materials.hair, [1, 1, 1], [0, 0, 0])),
+  )
 
   // 上半身的原點在髖部,前傾時繞髖部轉,腿不會跟著傾斜
   const upperBody = new Group()
@@ -249,21 +271,11 @@ function armParts(box, materials) {
   ]
 }
 
-// 頭與頭髮,原點在頭的中心。臉不做五官
-function headParts(ball, hairCapGeometries, materials) {
-  // 髮蓋比頭大一圈,貼著頭皮往後梳,邊緣與頭皮之間的那一點落差就是頭髮的厚度
-  const thickness = 0.015
-  const capRadii = HEAD.radii.map((radius) => radius + thickness)
-  const caps = hairCapGeometries.map((geometry) => part(geometry, materials.hair, capRadii, [0, 0.005, 0.005]))
-  const bun = part(ball, materials.hair, [0.095, 0.09, 0.08], [0, -0.06, 0.235])
-  return [part(ball, materials.skin, HEAD.radii, [0, 0, 0]), ...caps, bun]
-}
-
 /**
- * 半徑為 1 的髮蓋球殼,中心在原點,形狀由 `HAIR_CAP` 決定。
+ * 髮蓋球殼,擺在頭的座標裡,形狀由 `HAIR_CAP` 決定,貼著撐起圓頂的髮殼。
  *
  * 球殼的軸心原本朝上,往後倒之後軸心指向後上方。球殼分成兩塊:靠軸心的一塊是完整的,
- * 外圈那一塊在正前方往左偏 partOffset 的經線上留一道縫當分線。兩塊要用同樣的縮放與位置擺放。
+ * 外圈那一塊在正前方往左偏 partOffset 的經線上留一道縫當分線。
  */
 function createHairCapGeometries() {
   const { tilt, coverage, partStart, partGap, partOffset } = HAIR_CAP
@@ -281,9 +293,74 @@ function createHairCapGeometries() {
     partStart - overlap,
     coverage - partStart + overlap,
   )
-  // 繞 x 軸轉正的角度,朝上的軸心會倒向 +z,也就是後面
-  for (const geometry of [crown, front]) geometry.rotateX(tilt)
+  const vertex = new Vector3()
+  for (const geometry of [crown, front]) {
+    // 繞 x 軸轉正的角度,朝上的軸心會倒向 +z,也就是後面
+    geometry.rotateX(tilt)
+    const position = geometry.attributes.position
+    for (let i = 0; i < position.count; i += 1) {
+      shellPoint(vertex.fromBufferAttribute(position, i), vertex)
+      position.setXYZ(i, vertex.x, vertex.y, vertex.z)
+    }
+    geometry.computeVertexNormals()
+  }
   return [crown, front]
+}
+
+/**
+ * 把方向 direction 換成髮殼上的點,寫進 target 並回傳 target。target 可以就是 direction。
+ *
+ * direction 必須是還沒乘上 `HAIR_SHELL.radii` 的方向,圓頂才會撐在對的位置。
+ * 它的長度是倍數:單位向量落在髮殼上,長一點的落在髮殼外面。
+ */
+function shellPoint(direction, target) {
+  const { radii, center } = HAIR_SHELL
+  const scale = domeScale(direction)
+  return target.set(
+    center[0] + direction.x * scale * radii[0],
+    center[1] + direction.y * scale * radii[1],
+    center[2] + direction.z * scale * radii[2],
+  )
+}
+
+// 髮殼在 direction 這個方向上要撐大成幾倍,見 `HAIR_DOME`。direction 不必是單位向量。
+// 圓頂從中心往外依 cos² 收平,在 reach 那一圈與髮殼接得平順,不會多出一道稜
+function domeScale(direction) {
+  // 圓頂的中心是髮蓋的軸心,方向是 (0, cos tilt, sin tilt)。先算 direction 與它夾角的 cos
+  const cosine = (Math.cos(HAIR_CAP.tilt) * direction.y + Math.sin(HAIR_CAP.tilt) * direction.z) / direction.length()
+  const angle = Math.acos(MathUtils.clamp(cosine, -1, 1))
+  if (angle >= HAIR_DOME.reach) return 1
+  return 1 + HAIR_DOME.lift * Math.cos((angle / HAIR_DOME.reach) * (Math.PI / 2)) ** 2
+}
+
+/**
+ * 一塊貼在髮殼上的鼓起,形狀由 `FRENCH_TWIST` 的一項決定,擺在頭的座標裡。
+ *
+ * 中間最厚,上下兩端與左右兩側都收窄、沉進髮殼裡,像一片葉子。
+ */
+function createHairSwell({ from, to, side, spread, height, sink }) {
+  // 單位球的每個頂點當成參數:y 決定上下的位置,x 決定左右的位置,z 決定浮出髮殼多高。
+  // z 為 1 的那一點浮出 height;z 為 0 的兩端與兩側沉進 sink
+  const geometry = new SphereGeometry(1, 8, 6)
+  const position = geometry.attributes.position
+  const { radii } = HAIR_SHELL
+  const direction = new Vector3()
+  const normal = new Vector3()
+  const point = new Vector3()
+  for (let i = 0; i < position.count; i += 1) {
+    // 上下的位置照緯度角平均分:照 y 平均分的話兩端是圓的,照緯度角分才會兩端尖。
+    // 浮點誤差會讓 y 略超出 ±1,acos 之前要先夾住
+    const latitude = Math.acos(MathUtils.clamp(position.getY(i), -1, 1))
+    const polar = from + (latitude / Math.PI) * (to - from)
+    const azimuth = side + position.getX(i) * spread
+    direction.set(Math.sin(azimuth), Math.cos(polar) * Math.cos(azimuth), Math.sin(polar) * Math.cos(azimuth))
+    // 法線取沒撐起圓頂的橢球的法線:圓頂很平緩,差別看不出來
+    normal.set(direction.x / radii[0], direction.y / radii[1], direction.z / radii[2]).normalize()
+    shellPoint(direction, point).addScaledVector(normal, position.getZ(i) * (height + sink) - sink)
+    position.setXYZ(i, point.x, point.y, point.z)
+  }
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 // 襯衫的領子:繞脖子一圈的領座,加上胸前往兩側攤開的兩片領尖
