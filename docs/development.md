@@ -9,9 +9,9 @@ make local       # Vite dev server(前景執行,Ctrl+C 停止)
 make local-down  # 停止並清理 container、network 與 volume
 ```
 
-打開 http://localhost:3000,首頁先顯示開始畫面,按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、
-上下移動調整俯仰角,站進有字母的死路按 F 收集,集滿 13 個字母門就打開,走出門看到破關畫面;
-Esc 放開游標,再點一下畫面繼續。
+打開 http://localhost:3000,首頁先顯示入口畫面的禮物盒,點一下進到開始畫面,音樂也從這一下開始播;
+按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,站進有字母的死路按 F 收集,
+集滿 13 個字母門就打開,走出門看到破關畫面;Esc 放開游標,再點一下畫面繼續,M 切換靜音。
 
 埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。
 
@@ -47,7 +47,8 @@ make format                   # Prettier(就地改檔)
 
 `tests/` 鏡射 `src/` 的結構。遊戲核心(`src/game/`)的測試只透過它的公開介面 `createGame` 給輸入、讀狀態,
 不測內部的部件。渲染層(`src/render/`)與介面層(`src/ui/`)沒有自動化測試,畫面的驗證是開實際頁面截圖、
-檢查 console 沒有錯誤。
+檢查 console 沒有錯誤。音訊(`src/audio/`)也沒有自動化測試:容易出錯的是瀏覽器的行為(擋自動播放、循環的接縫、
+淡出),假的播放器測不到,所以以真人在桌機瀏覽器(Chrome 或 Edge)實際試玩、聽過為準。
 
 驗證畫面時不必每次真的走過整張迷宮:開 `http://localhost:3000/?teleport`,在 console 呼叫
 `window.teleport(col, row)`,主角就會被移到那一格的中央(col 往東、row 往南,從 0 數起)。
