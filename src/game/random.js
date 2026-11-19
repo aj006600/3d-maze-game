@@ -10,6 +10,7 @@
 export function createRandom(seed) {
   let state = seed >>> 0
 
+  /** 回傳大於等於 0、小於 1 的小數。 */
   function next() {
     state = (state + 0x6d2b79f5) >>> 0
     let t = state
@@ -39,5 +40,5 @@ export function createRandom(seed) {
     return shuffled
   }
 
-  return { int, pick, shuffle }
+  return { float: next, int, pick, shuffle }
 }

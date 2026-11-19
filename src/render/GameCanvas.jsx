@@ -9,6 +9,7 @@ import { createDogFollower } from './dogFollower.js'
 import { createFollowCamera } from './followCamera.js'
 import { createLetterFigures } from './letterFigures.js'
 import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
+import { createPassengerFigure } from './passengerFigure.js'
 import { createPlayerFigure } from './playerFigure.js'
 
 // 一幀最多推進幾秒。分頁切走時動畫迴圈會停下,切回來的第一幀不該讓主角一口氣跑出一大段。
@@ -122,6 +123,12 @@ const GameCanvas = forwardRef(function GameCanvas(
     mazeScene.scene.add(figure.object)
     const dogFigure = createDogFigure()
     mazeScene.scene.add(dogFigure.object)
+    // 一局裡奧客的人數固定,所以造型在開局時照人數建好
+    const passengerFigures = game.passengers.map(() => {
+      const passengerFigure = createPassengerFigure()
+      mazeScene.scene.add(passengerFigure.object)
+      return passengerFigure
+    })
     const dogFollower = createDogFollower(game)
     const followCamera = createFollowCamera(game)
     const { camera } = followCamera
@@ -136,6 +143,7 @@ const GameCanvas = forwardRef(function GameCanvas(
       lastTime = time
 
       const before = game.player
+      const passengersBefore = game.passengers
       const { pitch, interactions, ...input } = controls.read()
       if (activeRef.current && controls.isLocked()) {
         game.step({ ...input, dt })
@@ -168,13 +176,17 @@ const GameCanvas = forwardRef(function GameCanvas(
       const position = toWorld(game.maze, player)
       // 鏡頭先就定位:主角的造型要依鏡頭這一幀的位置決定登機箱要不要藏起來
       followCamera.follow(position, player.heading, pitch, dt)
-      const travelled = Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE
+      const travelled = travelledBetween(before, player)
       figure.place(position, player.heading)
       // 按著倒退鍵時傳負的距離,登機箱的輪子才會反轉
       figure.animate(input.forward < 0 ? -travelled : travelled, dt, camera.position)
       const dogPose = dogFollower.follow(position, player.heading, dt)
       dogFigure.place(dogPose.position, dogPose.heading)
       dogFigure.animate(dogPose.distance, dt)
+      game.passengers.forEach((passenger, i) => {
+        passengerFigures[i].place(toWorld(game.maze, passenger), passenger.heading)
+        passengerFigures[i].animate(travelledBetween(passengersBefore[i], passenger), dt)
+      })
       letterFigures.animate(time / 1000, camera.position)
 
       renderer.render(mazeScene.scene, camera)
@@ -185,6 +197,7 @@ const GameCanvas = forwardRef(function GameCanvas(
       cameraRef.current = null
       figure.dispose()
       dogFigure.dispose()
+      for (const passengerFigure of passengerFigures) passengerFigure.dispose()
       letterFigures.dispose()
       mazeScene.dispose()
     }
@@ -206,6 +219,11 @@ function statusOf(game) {
     // 無條件進位:5 分鐘的一局一開始是 300,剩 0.4 秒時還是 1,歸零的那一刻才是 0
     countdown: game.countdown === null ? null : Math.ceil(game.countdown),
   }
+}
+
+// 從遊戲核心的位置 before 到 after 的距離,換算成世界座標的長度
+function travelledBetween(before, after) {
+  return Math.hypot(after.x - before.x, after.y - before.y) * CELL_SIZE
 }
 
 function fitCamera(camera, container) {
