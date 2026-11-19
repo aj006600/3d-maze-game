@@ -1,9 +1,9 @@
 // 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
-// 依通關字串收集字母,開門與破關,時限與挑戰失敗,測試用的傳送 hook,以及奧客的出現、遊蕩與碰撞。
+// 依通關字串收集字母,開門與破關,時限與挑戰失敗,揮擊,測試用的傳送 hook,以及奧客的出現、遊蕩與碰撞。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { PASSENGERS, TIME_LIMITS } from '../../src/config.js'
+import { PASSENGERS, SWING_SECONDS, TIME_LIMITS } from '../../src/config.js'
 import { createGame } from '../../src/game/game.js'
 
 // 測試對方向的理解直接取自公開介面的契約(row 往南遞增、col 往東遞增),不沿用核心內部的對照表
@@ -661,6 +661,79 @@ describe('時限與挑戰失敗', () => {
     run(game, {}, 600, 1)
     expect(game.countdown).toBe(countdown)
     expect(game.failed).toBe(false)
+  })
+})
+
+describe('揮擊', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('揮擊一次,進度從開頭走到結尾,揮完回到沒有在揮', () => {
+    const game = createGame(1)
+    expect(game.swingProgress, '還沒揮').toBeNull()
+    game.swing()
+    expect(game.swingProgress, '剛開始揮').toBe(0)
+    run(game, {}, SWING_SECONDS / 2, SWING_SECONDS / 2)
+    expect(game.swingProgress, '揮到一半').toBeCloseTo(0.5)
+    run(game, {}, SWING_SECONDS * 0.4, SWING_SECONDS * 0.4)
+    expect(game.swingProgress, '快揮完').toBeCloseTo(0.9)
+    run(game, {}, SWING_SECONDS * 0.2, SWING_SECONDS * 0.2)
+    expect(game.swingProgress, '揮完').toBeNull()
+  })
+
+  it('正在揮的時候再揮,這次揮擊不會重來,揮完之後也不會接著再揮一次', () => {
+    const game = createGame(1)
+    game.swing()
+    run(game, {}, SWING_SECONDS / 2, SWING_SECONDS / 2)
+    game.swing()
+    expect(game.swingProgress, '再揮的那一刻').toBeCloseTo(0.5)
+    run(game, {}, SWING_SECONDS, SWING_SECONDS / 2)
+    expect(game.swingProgress, '揮完之後').toBeNull()
+  })
+
+  it('沒有推進時,不論經過多久進度都不變,再推進時從停住的地方接著揮', () => {
+    vi.useFakeTimers()
+    const game = createGame(1)
+    game.swing()
+    run(game, {}, SWING_SECONDS * 0.3, SWING_SECONDS * 0.3)
+    vi.advanceTimersByTime(60 * 60 * 1000)
+    expect(game.swingProgress, '一小時沒有推進').toBeCloseTo(0.3)
+    run(game, {}, SWING_SECONDS * 0.2, SWING_SECONDS * 0.2)
+    expect(game.swingProgress, '接著推進').toBeCloseTo(0.5)
+  })
+
+  it('揮擊時主角照樣跑與轉向,跑到的位置與沒有揮擊時相同', () => {
+    for (const seed of SEEDS) {
+      const swinging = createGame(seed)
+      const still = createGame(seed)
+      const side = swinging.maze.openings(swinging.start)[0]
+      swinging.swing()
+      for (const game of [swinging, still]) {
+        run(game, { forward: 1, heading: HEADINGS[side] }, SWING_SECONDS / 2)
+        run(game, { right: 1, heading: HEADINGS[side] + 0.3 }, 0.1)
+      }
+      expect(swinging.swingProgress, `seed ${seed}`).not.toBeNull()
+      expect(swinging.player, `seed ${seed}`).toEqual(still.player)
+    }
+  })
+
+  it('挑戰失敗之後揮擊沒有效果', () => {
+    const game = createGame(1, { timeLimit: 300 })
+    run(game, {}, 300, 1)
+    expect(game.failed).toBe(true)
+    game.swing()
+    expect(game.swingProgress).toBeNull()
+  })
+
+  it('破關之後揮擊沒有效果', () => {
+    const game = createGame(1, { allowTeleport: true })
+    collectFirst(game, 13)
+    game.teleport(game.door)
+    run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1 / RUN_SPEED)
+    expect(game.finished).toBe(true)
+    game.swing()
+    expect(game.swingProgress).toBeNull()
   })
 })
 

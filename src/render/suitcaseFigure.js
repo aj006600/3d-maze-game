@@ -1,8 +1,18 @@
-// 主角左手一直拉著的登機箱:霧面黑色的硬殼,配上虎橘色的滾邊、拉鍊線、按鈕外框與輪框,沒有任何品牌字樣。
-// 外觀用幾何體拼成,不使用模型或圖片素材檔;正面口袋面板上的虎紋浮雕是程式畫出來的貼圖。
-// 登機箱是純裝飾,不參與碰撞,遊戲核心不知道它的存在。這裡只負責外觀與姿勢:
-// 握把要落在哪裡、箱子要往後倒多少,由主角的造型依左手的位置決定。
-import { BoxGeometry, CylinderGeometry, ExtrudeGeometry, Group, MeshStandardMaterial, Shape, Vector3 } from 'three'
+// 主角平常用左手拉著、揮擊時雙手舉起來揮的登機箱:霧面黑色的硬殼,配上虎橘色的滾邊、拉鍊線、按鈕外框與輪框,
+// 沒有任何品牌字樣。外觀用幾何體拼成,不使用模型或圖片素材檔;正面口袋面板上的虎紋浮雕是程式畫出來的貼圖。
+// 登機箱不參與碰撞,遊戲核心不知道它的存在。這裡只負責外觀與姿勢:
+// 握把要落在哪裡、箱子要往後倒多少、揮擊時往哪裡甩,由主角的造型依手的位置決定。
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  ExtrudeGeometry,
+  Group,
+  Matrix4,
+  MeshStandardMaterial,
+  Quaternion,
+  Shape,
+  Vector3,
+} from 'three'
 
 import { createCanvasTexture, part } from './lowPolyFigure.js'
 import { paintTigerStripes, TIGER_ORANGE, TIGER_TILE_SIZE } from './tigerStripes.js'
@@ -44,8 +54,11 @@ const GRIP = { width: 0.3, height: 0.03, depth: 0.036 }
 // 箱頂收拉桿的底座,拉桿收到底時握把就靠在它上面
 const DOCK_HEIGHT = 0.014
 const BAR_BOTTOM = SHELL_TOP + DOCK_HEIGHT
-// 往後倒時著地的是拉桿那一面的兩個輪子,箱子繞它們的輪軸轉
+// 往後倒時著地的是拉桿那一面的兩個輪子,箱子繞它們的輪軸轉。輪軸沿著 x
 const PIVOT = { y: WHEEL.radius, z: -SHELL.depth / 2 + WHEEL.inset }
+const TILT_AXIS = new Vector3(1, 0, 0)
+// 揮擊時拉桿伸出箱頂的長度。拉桿伸得越長,箱子甩出去的半徑越大,離主角的身體也越遠
+const SWING_EXTENSION = 0.42
 
 // 鏡頭進到這個距離內就可能插進箱身,畫面會被黑色的箱身蓋住一大片。
 // 距離是箱身含輪子的外接球半徑,再多留 0.15 涵蓋鏡頭的 near 距離。拉桿很細,蓋不住畫面,所以不算在內
@@ -55,9 +68,16 @@ const HIDE_DISTANCE = Math.hypot(SHELL.width, SHELL_TOP, SHELL.depth + PANEL.dep
  * 建立登機箱。`object` 要由呼叫端加進主角的造型裡,跟著主角一起擺放。
  *
  * 姿勢用主角造型的座標描述:原點在主角腳下的地面上,臉朝 -z,右手在 +x。每一幀依序呼叫:
- * - `pose(grip, tilt)`:grip 是手握住握把的那一點 `{ x, y, z }`。tilt 是箱子往後倒的角度,0 是四輪著地的直立。
- *   往後倒時只有拉桿那一面的兩個輪子著地,箱頂倒向主角的前方,箱身拖在握把的後面。
- *   箱子會擺到握把剛好在 grip 的位置,拉桿伸出的長度跟著 grip 的高度調整。
+ * - `pose(grip, tilt, swing)`:grip 是手握住握把的那一點 `{ x, y, z }`,箱子會擺到握把的中心剛好在這一點。
+ *   swing 是 null 時,箱子拉在地上:
+ *   - tilt 是箱子往後倒的角度,0 是四輪著地的直立。
+ *   - 往後倒時只有拉桿那一面的兩個輪子著地,箱頂倒向主角的前方,箱身拖在握把的後面。
+ *   - 拉桿伸出的長度跟著 grip 的高度調整,輪子才剛好著地。
+ *   揮擊時 swing 是 `{ direction, across, weight }`,箱子離開地面,掛在拉伸到最長的拉桿末端:
+ *   - direction 是從握把往箱子的方向,也就是拉桿伸出去的方向。
+ *   - across 是握把橫桿的方向,從左手指向右手。它必須與 direction 垂直,箱子的寬度也沿著這個方向。
+ *   - weight 是揮擊的姿勢蓋過拉在地上的姿勢的程度,0 與 swing 是 null 時相同,1 是完全照 direction 與 across 擺。
+ *   兩個方向都必須是單位向量。
  * - `roll(distance)`:輪子依這一幀移動的距離轉動,distance 是負的時反轉。
  * - `hideNear(cameraPosition)`:cameraPosition 是鏡頭在世界座標的位置。鏡頭離箱身太近時把整個登機箱藏起來,
  *   鏡頭離開後再出現。它量的是箱子擺好之後的位置,所以要在 `pose` 之後呼叫。
@@ -151,10 +171,16 @@ export function createSuitcaseFigure() {
 
   let spin = 0
   const center = new Vector3()
+  const swingQuaternion = new Quaternion()
+  const basis = new Matrix4()
+  const xAxis = new Vector3()
+  const yAxis = new Vector3()
+  const zAxis = new Vector3()
+  const gripOffset = new Vector3()
 
   return {
     object,
-    pose(grip, tilt) {
+    pose(grip, tilt, swing = null) {
       const cos = Math.cos(tilt)
       const sin = Math.sin(tilt)
       // 握把中心在輪軸前方 forward 的地方(往 -z 是負的),這個距離不隨拉桿伸縮改變
@@ -162,9 +188,24 @@ export function createSuitcaseFigure() {
       // 握把中心離輪軸多高,沿著箱子的上下方向量。往後倒是繞 x 軸轉負的角度,
       // 箱子座標的 (上, 前) 轉到 (上·cos + 前·sin, 前·cos − 上·sin)
       const up = (grip.y - PIVOT.y - forward * sin) / cos
-      object.position.set(grip.x, PIVOT.y, grip.z + up * sin - forward * cos)
-      object.rotation.x = -tilt
-      setExtension(up - (BAR_BOTTOM + GRIP.height / 2 - PIVOT.y))
+      let extension = up - (BAR_BOTTOM + GRIP.height / 2 - PIVOT.y)
+      object.quaternion.setFromAxisAngle(TILT_AXIS, -tilt)
+      if (swing !== null) {
+        // 箱子的 +y 從箱身指向握把,所以是 direction 的反方向;+x 沿著握把橫桿
+        yAxis.copy(swing.direction).negate()
+        xAxis.copy(swing.across)
+        zAxis.crossVectors(xAxis, yAxis)
+        swingQuaternion.setFromRotationMatrix(basis.makeBasis(xAxis, yAxis, zAxis))
+        object.quaternion.slerp(swingQuaternion, swing.weight)
+        extension += (SWING_EXTENSION - extension) * swing.weight
+        // 握把還不夠高時,拉桿伸太長會讓箱子插進地面,所以伸到箱子的最低點剛好碰到地面為止。
+        // 拉在地上時,上面算出來的長度本來就讓輪子剛好著地,不必再檢查
+        extension = Math.min(extension, groundedExtension(grip, object.quaternion))
+      }
+      setExtension(extension)
+      // 先轉好方向,再把整個箱子挪到握把中心剛好落在 grip 的位置
+      gripOffset.set(0, BAR_BOTTOM + extension + GRIP.height / 2 - PIVOT.y, forward).applyQuaternion(object.quaternion)
+      object.position.copy(grip).sub(gripOffset)
     },
     roll(distance) {
       // 往前(-z)滾的輪子繞 x 軸轉負的角度,著地的那一點才不會打滑
@@ -182,6 +223,45 @@ export function createSuitcaseFigure() {
     },
   }
 }
+
+// 箱子最先碰到地面的那些點,用登機箱 object 的座標描述(原點在輪軸上),拉桿伸出的長度是 0。
+// 輪子取輪軸的中心,碰地時要再減掉輪子的半徑;箱身取含底座與正面面板的外框的八個角
+const LOW_POINTS = (() => {
+  const shift = (x, y, z) => new Vector3(x, y - PIVOT.y, z - PIVOT.z)
+  const wheels = [-1, 1].flatMap((x) =>
+    [-1, 1].map((z) => shift(x * (SHELL.width / 2 - WHEEL.inset), WHEEL.radius, z * (SHELL.depth / 2 - WHEEL.inset))),
+  )
+  const halfWidth = SHELL.width / 2 + BASE.margin
+  const corners = [-1, 1].flatMap((x) =>
+    [CLEARANCE, SHELL_TOP].flatMap((y) =>
+      [-SHELL.depth / 2 - BASE.margin, SHELL.depth / 2 + PANEL.depth].map((z) => shift(x * halfWidth, y, z)),
+    ),
+  )
+  return [
+    ...wheels.map((point) => ({ point, radius: WHEEL.radius })),
+    ...corners.map((point) => ({ point, radius: 0 })),
+  ]
+})()
+
+/**
+ * 箱子轉成 quaternion 的方向、握把中心在 grip 時,拉桿最多能伸多長,箱子才不會插進地面。
+ *
+ * 箱子在握把上方時,拉桿伸得再長都碰不到地面,回傳 Infinity。
+ */
+function groundedExtension(grip, quaternion) {
+  // 拉桿每多伸一單位,箱子就沿著拉桿往箱子那頭多挪一單位,高度因此少掉拉桿方向的 y 分量
+  const drop = groundScratch.up.set(0, 1, 0).applyQuaternion(quaternion).y
+  if (drop <= 0) return Infinity
+  // 拉桿長度是 0 時,握把中心在 object 座標裡的位置
+  const gripAtZero = groundScratch.grip.set(0, BAR_BOTTOM + GRIP.height / 2 - PIVOT.y, BAR.z - PIVOT.z)
+  let limit = Infinity
+  for (const { point, radius } of LOW_POINTS) {
+    const height = grip.y + groundScratch.point.subVectors(point, gripAtZero).applyQuaternion(quaternion).y - radius
+    limit = Math.min(limit, height / drop)
+  }
+  return limit
+}
+const groundScratch = { up: new Vector3(), grip: new Vector3(), point: new Vector3() }
 
 function handleParts(box, material) {
   const [thickness, width] = HANDLE.bar

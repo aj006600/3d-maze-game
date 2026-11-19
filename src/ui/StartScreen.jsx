@@ -1,14 +1,18 @@
 // 開始畫面:拆開入口畫面的禮物盒之後看到的標題、目標與操作說明,讓玩家不需要別人教就能開始玩,
 // 開局前也在這裡選時限。
 // 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上。
+import { Fragment } from 'react'
+
 import { PHRASE, TIME_LIMITS } from '../config.js'
 import Key from './Key.jsx'
 import { backdrop, panel, primaryButton, secondaryButton, title } from './screenStyles.js'
 
+// separator 是同一列的幾個按鍵之間要夾的字。沒有 separator 的那一列,按鍵直接並排
 const CONTROL_HINTS = [
   { keys: ['W', 'A', 'S', 'D'], action: 'W 前進、S 倒退、A 與 D 橫移' },
   { keys: ['滑鼠'], action: '轉動視角,主角跟著轉向' },
   { keys: ['F'], action: '站進有字母的死路時收集字母' },
+  { keys: ['滑鼠左鍵', '空白鍵'], separator: '/', action: '揮擊登機箱,擊倒擋路的奧客' },
   { keys: ['Esc'], action: '暫停' },
   { keys: ['M'], action: '靜音' },
 ]
@@ -28,11 +32,14 @@ export default function StartScreen({ timeLimit, onTimeLimitChange, onStart }) {
         <h1 style={styles.title}>生日迷宮</h1>
         <p style={styles.goal}>在迷宮的死路裡依序收集 {PHRASE} 的字母,集滿後從打開的門走出去。</p>
         <ul style={styles.hints}>
-          {CONTROL_HINTS.map(({ keys, action }) => (
+          {CONTROL_HINTS.map(({ keys, separator, action }) => (
             <li key={action} style={styles.hint}>
               <span style={styles.keys}>
-                {keys.map((key) => (
-                  <Key key={key}>{key}</Key>
+                {keys.map((key, i) => (
+                  <Fragment key={key}>
+                    {separator && i > 0 && <span style={styles.separator}>{separator}</span>}
+                    <Key>{key}</Key>
+                  </Fragment>
                 ))}
               </span>
               <span>{action}</span>
@@ -90,15 +97,20 @@ const styles = {
   },
   hint: {
     display: 'grid',
-    gridTemplateColumns: '128px 1fr',
+    gridTemplateColumns: '136px 1fr',
     alignItems: 'center',
     gap: 12,
     fontSize: 15,
   },
   keys: {
     display: 'flex',
+    alignItems: 'center',
     gap: 4,
     justifyContent: 'flex-end',
+  },
+  separator: {
+    margin: '0 2px',
+    color: '#8a766b',
   },
   timeLimitLabel: {
     margin: '0 0 8px',

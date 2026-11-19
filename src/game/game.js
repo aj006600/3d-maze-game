@@ -1,7 +1,8 @@
 // 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母,收集完就能從門走出去破關。
 // 有時限的一局,倒數歸零時還沒破關就是挑戰失敗。迷宮裡有奧客在遊蕩,他們的身體會擋住主角。
+// 主角可以揮擊登機箱,揮擊不影響移動與收集。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
-import { PHRASE } from '../config.js'
+import { PHRASE, SWING_SECONDS } from '../config.js'
 import { deadEndsOf, generateMaze, isSameCell } from './maze.js'
 import { moveCircle, PLAYER_RADIUS, wallsOf } from './movement.js'
 import { createPassengers } from './passengers.js'
@@ -63,6 +64,13 @@ const RUN_SPEED = 1.25
  *   主角撞上奧客也會被擋住,斜向撞上時沿著奧客的邊緣滑動,但推不動他;奧客碰到主角就停下,不會把主角推開。
  *   有時限的一局在破關之前,每一步都從倒數扣掉 dt 秒,站著不動的那一步也一樣。
  *   破關之後奧客不再動。挑戰失敗之後呼叫沒有任何效果:主角與奧客都不動,主角的朝向也不變。
+ * - `swing()`:按下一次揮擊鍵,主角從頭揮擊一次。下列時候呼叫沒有效果,也不會排到之後才揮:
+ *   - 正在揮的時候。
+ *   - 破關或挑戰失敗之後。
+ * - `swingProgress`:這次揮擊揮到哪裡。剛呼叫 `swing()` 時是 0,越接近 1 越接近揮完,揮完時回到 null。
+ *   沒有在揮時是 null。它只由 `step` 的 dt 累加,不讀系統時鐘,所以不推進時停在原處。
+ *   揮完一次的秒數是設定模組的 `SWING_SECONDS`。
+ *   挑戰失敗之後 `step` 沒有效果,所以揮到一半時挑戰失敗,它就停在那裡,不會回到 null。
  * - `teleport({ col, row })`:把主角移到該格的中央,朝向不變。沒有開啟 `allowTeleport` 時會丟出錯誤。
  *   傳送到與奧客重疊的地方時,主角與那位奧客都只能往離開對方的方向移動。
  */
@@ -77,6 +85,8 @@ export function createGame(seed, { allowTeleport = false, timeLimit = null } = {
   let finished = false
   let countdown = timeLimit
   let failed = false
+  // 這次揮擊已經揮了幾秒,沒有在揮時是 null
+  let swingElapsed = null
   return {
     maze,
     start,
@@ -113,6 +123,14 @@ export function createGame(seed, { allowTeleport = false, timeLimit = null } = {
     get atDoor() {
       return isSameCell(cellOf(player), door)
     },
+    get swingProgress() {
+      return swingElapsed === null ? null : swingElapsed / SWING_SECONDS
+    },
+    swing() {
+      // 正在揮的時候再按不排隊:直接丟掉,揮完之後不會補揮
+      if (failed || finished || swingElapsed !== null) return
+      swingElapsed = 0
+    },
     interact() {
       if (failed) return null
       const placed = letterAt(letters, player)
@@ -129,6 +147,10 @@ export function createGame(seed, { allowTeleport = false, timeLimit = null } = {
       if (failed) return
       // 破關之後倒數停住。破關的那一步仍然要從倒數扣掉 dt 秒
       if (countdown !== null && !finished) countdown = Math.max(countdown - dt, 0)
+      if (swingElapsed !== null) {
+        swingElapsed += dt
+        if (swingElapsed >= SWING_SECONDS) swingElapsed = null
+      }
       player.heading = heading
       const length = Math.hypot(forward, right)
       if (length > 0) {
