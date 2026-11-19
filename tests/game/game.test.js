@@ -570,4 +570,3 @@ describe('傳送 hook', () => {
     expect(game.player).toEqual(before)
   })
 })
-

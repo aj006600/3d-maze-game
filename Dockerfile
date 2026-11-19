@@ -5,13 +5,16 @@ FROM --platform=$BUILDPLATFORM node:22-slim AS base
 LABEL org.opencontainers.image.title="3d-maze-game"
 WORKDIR /app
 COPY package.json package-lock.json ./
-# npm ci 預設連 devDependencies 一起裝:build 要用 vite,dev 要用 vitest
+# npm ci 預設連 devDependencies 一起裝:build 要用 vite,dev 要用 vitest、eslint 與 prettier
 RUN npm ci
 
-# dev:測試用(vitest),永不部署
+# dev:本機開發、測試與檢查用,永不部署。
+# CMD 是 make local 的 Vite dev server;--host 讓它聽所有介面,容器外才連得到。
+# 容器內的埠固定 3000,與 make local 預設的對外埠相同,Vite 啟動時印的網址才點得開
 FROM base AS dev
 COPY . .
-CMD ["npm", "test"]
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--host", "--port", "3000"]
 
 FROM base AS build
 COPY . .
