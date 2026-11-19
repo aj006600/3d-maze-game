@@ -137,12 +137,15 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
       const player = game.player
 
       const position = toWorld(game.maze, player)
+      // 鏡頭先就定位:主角的造型要依鏡頭這一幀的位置決定登機箱要不要藏起來
+      followCamera.follow(position, player.heading, pitch, dt)
+      const travelled = Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE
       figure.place(position, player.heading)
-      figure.animate(Math.hypot(player.x - before.x, player.y - before.y) * CELL_SIZE, dt)
+      // 按著倒退鍵時傳負的距離,登機箱的輪子才會反轉
+      figure.animate(input.forward < 0 ? -travelled : travelled, dt, camera.position)
       const dogPose = dogFollower.follow(position, player.heading, dt)
       dogFigure.place(dogPose.position, dogPose.heading)
       dogFigure.animate(dogPose.distance, dt)
-      followCamera.follow(position, player.heading, pitch, dt)
       letterFigures.animate(time / 1000, camera.position)
 
       renderer.render(mazeScene.scene, camera)

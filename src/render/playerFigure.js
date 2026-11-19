@@ -1,19 +1,20 @@
-// 主角的人:一位穿制服的空服員,用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,
+// 主角的人:一位穿制服的空服員,左手一直拉著登機箱。用長方體與多面體拼成的低多邊形造型,跑步動作由程式計算,
 // 不使用模型、動畫或圖片素材檔;腰帶的虎紋也是在程式裡畫出來的貼圖。
 // 這裡只負責外觀、擺放與動作;主角在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的狀態告訴它。
 // 鏡頭大多在主角背後,所以背影的辨識度優先:後腦的包頭、腰帶右側的蝴蝶結與兩條帶尾。
 import {
   BoxGeometry,
-  CanvasTexture,
   DoubleSide,
   Group,
   IcosahedronGeometry,
   MeshStandardMaterial,
   SphereGeometry,
-  SRGBColorSpace,
+  Vector3,
 } from 'three'
 
-import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
+import { createCanvasTexture, createRunCycle, part, placeFigure } from './lowPolyFigure.js'
+import { createSuitcaseFigure } from './suitcaseFigure.js'
+import { paintTigerStripes, TIGER_ORANGE, TIGER_TILE_SIZE } from './tigerStripes.js'
 
 const SKIN_COLOR = '#f2c7a5'
 const HAIR_COLOR = '#2b1d17'
@@ -21,7 +22,6 @@ const SHIRT_COLOR = '#f5c065'
 const NAME_TAG_COLOR = '#ffe03a'
 const PANTS_COLOR = '#3a3c42'
 const SHOE_COLOR = '#151515'
-const TIGER_ORANGE = '#ef7a1a'
 const TIGER_BLACK = '#1b1410'
 
 // 各部位的尺寸,單位與世界座標相同。整個人含頭髮大約 1.94 高。
@@ -37,8 +37,11 @@ const CHEST = { y: 0.4, size: [0.36, 0.23] }
 const SHOULDER = { y: 0.56, size: [0.37, 0.2] }
 const BELT = { y: 0.21, width: 0.33, height: 0.07, depth: 0.22 }
 // length 是肩關節到手腕的長度。七分袖是整條袖子的七成,所以 sleeve 取 length 的七成。
-// splay 是手臂往外張的角度,它讓垂下的手臂避開腰帶右側的蝴蝶結,縮小它之前要確認袖口不會插進蝴蝶結
+// splay 是右手臂往外張的角度,它讓垂下的手臂避開腰帶右側的蝴蝶結,縮小它之前要確認袖口不會插進蝴蝶結。
+// 左手臂拉著登機箱,往外張的角度另外由 CARRY 決定
 const ARM = { width: 0.1, depth: 0.11, sleeve: 0.36, length: 0.52, splay: 0.14 }
+// 手掌中心離肩關節的距離,沿著手臂往下量
+const HAND_REACH = ARM.length + 0.05
 // 頭是一顆橢球,radii 是 x、y、z 三個方向的半徑,y 是中心的高度
 const HEAD = { radii: [0.165, 0.19, 0.175], y: 0.83 }
 // 髮蓋是一塊球殼,軸心從頭頂往後倒 tilt,從軸心往外蓋到 coverage 的角度。
@@ -54,28 +57,21 @@ const ARM_SWING = 0.8
 const BOB_HEIGHT = 0.08
 const FORWARD_LEAN = 0.15
 
-// 虎紋貼圖的每一條紋路:中心 x、上端 y、下端 y、最寬處的半寬、兩端往左右偏的量,單位是貼圖的像素。
-// 有的紋路貫穿上下,有的只畫到一半,看起來才像虎紋而不是整齊的條碼
-const TIGER_TEXTURE_SIZE = [128, 32]
-const TIGER_STRIPES = [
-  [6, 0, 32, 4, 5],
-  [22, 0, 19, 3.5, -4],
-  [34, 12, 32, 4, 4],
-  [50, 0, 32, 5, -5],
-  [66, 0, 22, 3.5, 4],
-  [78, 9, 32, 4, -3],
-  [94, 0, 32, 5, 5],
-  [110, 0, 17, 3, -3],
-  [120, 14, 32, 3.5, 4],
-]
+// 左手一直握著登機箱的拉桿,不跟著跑步前後擺動。
+// - splay 是左手臂往外張的角度。登機箱的握把在箱子正中間,手要張到半個箱寬落在左腿外側,箱子才不會插進左腿。
+// - pullBack 是跑起來時左手臂往後伸的角度,登機箱因此拖在左後方。
+// - tilt 是跑起來時登機箱往後倒的角度。
+const CARRY = { splay: 0.32, pullBack: 0.45, tilt: (35 * Math.PI) / 180 }
 
 /**
- * 建立主角的人,`object` 要由呼叫端加進場景。
+ * 建立主角的人與她左手拉著的登機箱,`object` 要由呼叫端加進場景。
  *
- * 每一幀呼叫兩個方法:
+ * 每一幀依序呼叫兩個方法:
  * - `place(position, heading)`:position 是世界座標地面上的 `{ x, z }`,heading 是遊戲核心的朝向。
- * - `animate(distance, dt)`:distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒。
- *   有在移動就播跑步動作,停下後很快回到站姿並保持靜止。
+ * - `animate(distance, dt, cameraPosition)`:distance 是這一幀在世界座標裡移動了多遠,倒退時是負的;
+ *   dt 是經過幾秒;cameraPosition 是鏡頭這一幀在世界座標的位置。
+ *   有在移動就播跑步動作,登機箱跟著往後倒、拖在左後方;停下後很快回到站姿並保持靜止,登機箱直立在左側。
+ *   登機箱的輪子依 distance 轉動,倒退時反轉;鏡頭離登機箱太近時,登機箱會暫時藏起來。
  *
  * 只能在瀏覽器裡建立,因為虎紋貼圖要用 canvas 畫。
  * 用完必須呼叫 `dispose()` 釋放 geometry、material 與貼圖。
@@ -120,14 +116,17 @@ export function createPlayerFigure() {
   const leftLeg = joint(-LEG.spacing, 0, ...legParts(box, materials))
   const rightLeg = joint(LEG.spacing, 0, ...legParts(box, materials))
 
-  // 手臂稍微往外張,垂下時才不會插進腰帶右側的蝴蝶結。
-  // Euler 的順序是先繞 z 再繞 x:先往外張,前後擺動時才不會改變往外張的角度
+  // 手臂往外張的角度見 ARM 與 CARRY。Euler 的順序是先繞 z 再繞 x:先往外張,前後擺動時才不會改變往外張的角度
   const shoulderX = SHOULDER.size[0] / 2 + ARM.width / 2
   const shoulderY = SHOULDER.y - 0.04
   const leftArm = joint(-shoulderX, shoulderY, ...armParts(box, materials))
   const rightArm = joint(shoulderX, shoulderY, ...armParts(box, materials))
-  leftArm.rotation.z = -ARM.splay
+  leftArm.rotation.z = -CARRY.splay
   rightArm.rotation.z = ARM.splay
+  // 左手掌的中心,登機箱的握把就擺在這一點
+  const leftHand = new Group()
+  leftHand.position.y = -HAND_REACH
+  leftArm.add(leftHand)
 
   const head = new Group()
   head.position.y = HEAD.y
@@ -155,31 +154,42 @@ export function createPlayerFigure() {
   hips.position.y = HIP_HEIGHT
   hips.add(leftLeg, rightLeg, upperBody)
 
+  const suitcase = createSuitcaseFigure()
   const object = new Group()
-  object.add(hips)
+  object.add(hips, suitcase.object)
 
   const runCycle = createRunCycle(STRIDE_LENGTH)
+  const grip = new Vector3()
 
   return {
     object,
     place(position, heading) {
       placeFigure(object, position, heading)
     },
-    animate(distance, dt) {
-      const { phase, blend } = runCycle.advance(distance, dt)
+    animate(distance, dt, cameraPosition) {
+      const { phase, blend } = runCycle.advance(Math.abs(distance), dt)
       const swing = Math.sin(phase) * blend
       leftLeg.rotation.x = swing * LEG_SWING
       rightLeg.rotation.x = -swing * LEG_SWING
-      leftArm.rotation.x = -swing * ARM_SWING
       rightArm.rotation.x = swing * ARM_SWING
       // 每跨一步身體起伏一次,所以用 |sin|;繞 x 軸轉負的角度是往前(-z)傾
       hips.position.y = HIP_HEIGHT + Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
       upperBody.rotation.x = -FORWARD_LEAN * blend
+      // 登機箱的姿勢用緩入緩出的強度,起跑與停下時箱子才不會猛然倒下或立起來
+      const carry = blend * blend * (3 - 2 * blend)
+      leftArm.rotation.x = -CARRY.pullBack * carry
+      // 全身擺好之後才量得到左手在哪裡,登機箱再依手的位置擺上去
+      leftHand.getWorldPosition(grip)
+      object.worldToLocal(grip)
+      suitcase.pose(grip, CARRY.tilt * carry)
+      suitcase.roll(distance)
+      suitcase.hideNear(cameraPosition)
     },
     dispose() {
       for (const geometry of geometries) geometry.dispose()
       for (const material of Object.values(materials)) material.dispose()
       tigerTexture.dispose()
+      suitcase.dispose()
     },
   }
 }
@@ -206,7 +216,7 @@ function armParts(box, materials) {
     part(box, materials.shirt, [ARM.width, ARM.sleeve + sleeveTop, ARM.depth], [0, (sleeveTop - ARM.sleeve) / 2, 0]),
     part(box, materials.shirt, [ARM.width + 0.025, 0.05, ARM.depth + 0.025], [0, -ARM.sleeve + 0.02, 0]),
     part(box, materials.skin, [ARM.width - 0.025, forearm, ARM.depth - 0.025], [0, -ARM.sleeve - forearm / 2, 0]),
-    part(box, materials.skin, [0.075, 0.1, 0.09], [0, -ARM.length - 0.05, 0]),
+    part(box, materials.skin, [0.075, 0.1, 0.09], [0, -HAND_REACH, 0]),
   ]
 }
 
@@ -304,27 +314,13 @@ function taperedBox(height, [bottomWidth, bottomDepth], [topWidth, topDepth]) {
   return geometry
 }
 
-// 橘底黑紋的虎紋貼圖。每條紋路是中間粗、兩端尖的梭形,貼在長方體的每一面上時紋路都沿著貼圖的上下方向
+// 腰帶與蝴蝶結的橘底黑紋虎紋貼圖。貼在長方體的每一面上時,紋路都沿著貼圖的上下方向
 function createTigerTexture() {
-  const [width, height] = TIGER_TEXTURE_SIZE
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext('2d')
-  context.fillStyle = TIGER_ORANGE
-  context.fillRect(0, 0, width, height)
-  context.fillStyle = TIGER_BLACK
-  for (const [x, top, bottom, halfWidth, lean] of TIGER_STRIPES) {
-    const middle = (top + bottom) / 2
-    // 二次曲線的控制點離中心兩倍半寬,曲線最寬的地方才剛好是半寬
-    context.beginPath()
-    context.moveTo(x + lean, top)
-    context.quadraticCurveTo(x + halfWidth * 2, middle, x - lean, bottom)
-    context.quadraticCurveTo(x - halfWidth * 2, middle, x + lean, top)
-    context.fill()
-  }
-  const texture = new CanvasTexture(canvas)
-  // canvas 的顏色是 sRGB,不標明的話整條腰帶會偏淡
-  texture.colorSpace = SRGBColorSpace
-  return texture
+  const [width, height] = TIGER_TILE_SIZE
+  return createCanvasTexture(width, height, (context) => {
+    context.fillStyle = TIGER_ORANGE
+    context.fillRect(0, 0, width, height)
+    context.fillStyle = TIGER_BLACK
+    paintTigerStripes(context)
+  })
 }
