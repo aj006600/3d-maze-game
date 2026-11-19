@@ -859,12 +859,12 @@ function trackPassengers(game, input, seconds, dt = FRAME) {
   return frames
 }
 
-// 主角躲進 Z 那條死路最裡面的角落:奧客走到那一格的中央也碰不到主角,所以主角擋不到任何一位奧客的路。
-// 死路只有一個開口,所以面向開口的對面再往右轉 45 度,前方與右手邊都是牆
+// 主角躲到迷宮外面,站著不動推進一秒:奧客只在迷宮裡走,碰不到迷宮外的主角,所以主角擋不到任何一位奧客的路。
+// 迷宮裡沒有這樣的地方:奧客幾乎塞滿走道,走進死路最裡面的那一格時,連躲在角落的主角也會碰到。
+// 躲起來的主角不能移動,在迷宮外跑動會被當成走出了門
 function hidePlayer(game) {
-  const z = game.letters.find(({ letter }) => letter === 'Z')
-  game.teleport(z)
-  run(game, { forward: 1, heading: HEADINGS[OPPOSITE[game.maze.openings(z)[0]]] + Math.PI / 4 }, 1)
+  game.teleport({ col: -10, row: -10 })
+  run(game, {}, 1)
   return game
 }
 
@@ -998,6 +998,40 @@ function meetFirstPassenger(game) {
   throw new Error('第一位奧客一直沒有走出格子的中央')
 }
 
+// 讓第一位奧客停在一個轉角格子的中央。主角先躲起來,等奧客走進轉角的格子、在中央停下來站著;
+// 另一位奧客要離那一格夠遠,才不會擋到主角。回傳那一格、奧客從哪一側走進來、待會兒要從哪一側走出去;
+// 一直等不到時回傳 null
+function stopFirstPassengerAtCorner(game) {
+  hidePlayer(game)
+  let previous = game.passengers[0]
+  for (let i = 0; i < 120 / FRAME; i += 1) {
+    run(game, {}, FRAME)
+    const [passenger, other] = game.passengers
+    const cell = cellOf(passenger)
+    const openings = game.maze.openings(cell)
+    // 遊蕩的奧客只有停下來站著時,一幀結束時才會剛好在格子中央;上一幀還在走,就是這一幀剛停下來
+    const justStopped =
+      passenger.x === cell.col + 0.5 && passenger.y === cell.row + 0.5 && movementOf(previous, passenger).distance > 0
+    previous = passenger
+    const isCorner = openings.length === 2 && !openings.includes(OPPOSITE[openings[0]])
+    if (!justStopped || !isCorner || Math.hypot(other.x - passenger.x, other.y - passenger.y) < 3) continue
+    // 奧客停下來時已經轉向待會兒要走出去的那一側
+    const exit = sideOf({ col: Math.round(Math.sin(passenger.heading)), row: Math.round(-Math.cos(passenger.heading)) })
+    return { cell, entrance: openings.find((side) => side !== exit), exit }
+  }
+  return null
+}
+
+// 主角朝 point `{ x, y }` 直直跑過去,跑剛好到得了那一點的時間;途中被擋住就停在被擋住的地方
+function runToward(game, point) {
+  const { x, y } = game.player
+  run(
+    game,
+    { forward: 1, heading: Math.atan2(point.x - x, y - point.y) },
+    Math.hypot(point.x - x, point.y - y) / RUN_SPEED,
+  )
+}
+
 describe('奧客的碰撞', () => {
   const COLLISION_SEEDS = SEEDS.slice(0, 10)
 
@@ -1051,6 +1085,27 @@ describe('奧客的碰撞', () => {
       run(game, { right: side === right ? 1 : -1, heading: HEADINGS[facing] }, 0.5)
       run(game, { forward: 1, heading: HEADINGS[facing] }, 1)
       expect(aheadAlong(direction, game.passengers[0], game.player), `seed ${seed}`).toBeGreaterThan(0)
+    }
+    expect(tested).toBeGreaterThan(0)
+  })
+
+  it('奧客停在轉角的格子中央時,主角也無法從他和內側的牆角之間繞過去', () => {
+    let tested = 0
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const corner = stopFirstPassengerAtCorner(game)
+      if (corner === null) continue
+      tested += 1
+      const { cell, entrance, exit } = corner
+      const goal = stepOf(cell, exit)
+      // 從奧客走進來的那一側出發,先跑向奧客與內側牆角之間的空隙中間(離格子中央約 0.4 格),再跑向另一側那一格的中央。
+      // 奧客站完會往另一側走、走在主角前面,所以主角要到得了那一格,只能先從他旁邊繞過去
+      game.teleport(stepOf(cell, entrance))
+      const inward = { col: OFFSETS[entrance].col + OFFSETS[exit].col, row: OFFSETS[entrance].row + OFFSETS[exit].row }
+      runToward(game, { x: cell.col + 0.5 + 0.28 * inward.col, y: cell.row + 0.5 + 0.28 * inward.row })
+      runToward(game, { x: goal.col + 0.5, y: goal.row + 0.5 })
+      expect(cellOf(game.player), `seed ${seed} ${keyOf(cell)}`).not.toEqual(goal)
+      if (tested === 5) break
     }
     expect(tested).toBeGreaterThan(0)
   })
