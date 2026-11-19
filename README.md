@@ -2,6 +2,8 @@
 
 生日迷宮:一個在瀏覽器裡玩的 3D 迷宮遊戲,主角帶著狗在迷宮裡依序收集拼出 HAPPY BIRTHDAY 的字母,打開門走出去。
 
+![遊戲畫面:主角拉著登機箱、帶著狗,跑向飄在死路裡的字母 H](docs/screenshot.png)
+
 ## How to Play
 
 **目標**:迷宮的死路裡放著 A 到 Z 的字母。照 HAPPY BIRTHDAY 的順序收集字母(空格不算,共 13 個),
@@ -57,7 +59,7 @@ make help    # 其餘指令
 ├── GLOSSARY.md             # 遊戲的用詞
 ├── CLAUDE.md · .claude/    # coding agent 的規則與 guard hooks
 ├── .github/workflows/ci-cd.yml  # test、build 檢查 → Release tag(vX.Y.Z)才發佈到 GitHub Pages
-└── docs/                   # development.md · deployment.md · adr/ · agents/(agent skills 的 issue tracker / label / domain 設定)
+└── docs/                   # development.md · deployment.md · adr/ · agents/(agent skills 的 issue tracker / label / domain 設定)· screenshot.png(上面的遊戲截圖)
 ```
 
 ## Credits

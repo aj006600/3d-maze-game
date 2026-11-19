@@ -1,6 +1,6 @@
-// 用幾何體拼成的低多邊形角色的共同做法:拼裝部件、擺到地面上,以及跑步動作的節奏。
-// 角色不使用模型或動畫素材檔,外觀與動作都在程式裡算出來。
-import { Mesh } from 'three'
+// 用幾何體拼成的低多邊形角色的共同做法:拼裝部件、畫貼圖、擺到地面上,以及跑步動作的節奏。
+// 角色不使用模型、動畫或圖片素材檔,外觀、貼圖與動作都在程式裡算出來。
+import { CanvasTexture, Mesh, SRGBColorSpace } from 'three'
 
 // 跑步動作在起跑與停下時漸強與漸弱的速度:每秒從靜止到全速幾次
 const BLEND_RATE = 8
@@ -18,6 +18,22 @@ export function part(geometry, material, [width, height, depth], [x, y, z]) {
   mesh.scale.set(width, height, depth)
   mesh.position.set(x, y, z)
   return mesh
+}
+
+/**
+ * 建立一張寬 width、高 height 像素的貼圖,內容由 `paint(context)` 畫在 canvas 上。
+ *
+ * 只能在瀏覽器裡呼叫,因為要用 canvas 畫。用完必須由呼叫端 dispose。
+ */
+export function createCanvasTexture(width, height, paint) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  paint(canvas.getContext('2d'))
+  const texture = new CanvasTexture(canvas)
+  // canvas 的顏色是 sRGB,不標明的話貼圖會偏淡
+  texture.colorSpace = SRGBColorSpace
+  return texture
 }
 
 /**

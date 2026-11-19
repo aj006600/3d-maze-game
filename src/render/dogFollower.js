@@ -1,5 +1,9 @@
 // 狗在哪裡、朝哪裡:狗沿著主角走過的路線落後一小段,再往路線的一側偏出去,跑起來就在主角身邊。
-// 狗不參與碰撞與任何規則,遊戲核心不知道狗的存在,所以這裡只讀主角的位置與這一局的牆。
+// 狗不參與碰撞與任何規則,遊戲核心不知道狗的存在,所以這裡只讀主角的位置、朝向與這一局的牆。
+//
+// 狗一直待在主角的右手邊,因為主角的左手拉著登機箱。狗偏向路線的哪一側由主角的朝向決定:
+// 往前跑時是行進方向的右側,倒退時是左側。主角原地轉身之後再跑,狗會落在路線的另一側,
+// 這時狗從主角的前方繞到右手邊,不從主角背後繞過去,因為主角的左後方是登機箱。
 //
 // 狗不會穿牆,靠的是三件事:
 // - 主角走過的路線本身不會穿牆。
@@ -45,6 +49,10 @@ const JUMP_DISTANCE = CELL_SIZE / 2
 const LOST_DISTANCE = CELL_SIZE / 2
 // 狗轉向的速度,這個值越大轉得越快
 const TURN_RATE = 10
+// 行進方向與主角朝向夾角的 cos,絕對值小於這個值時分不出主角是往前還是倒退,例如主角橫移時,這時狗留在原本那一側
+const SIDE_DECISION = 0.3
+// 狗換到主角右手邊時,先追向主角前方這麼遠的地方。它大於 PERSONAL_SPACE,狗才是從主角面前經過
+const CROSS_LEAD = 0.9
 
 /**
  * 依主角走過的路線,每一幀決定狗的位置與朝向。
@@ -54,7 +62,7 @@ const TURN_RATE = 10
  *
  * 每一幀呼叫 `follow(playerPosition, playerHeading, dt)`:
  * - playerPosition 是主角在世界座標地面上的 `{ x, z }`。
- * - playerHeading 是主角的朝向,只在狗重新站到主角身邊時用來決定狗站在哪裡、面向哪裡。
+ * - playerHeading 是主角的朝向。狗待在這個朝向的右手邊,重新站到主角身邊時也用它決定站在哪裡、面向哪裡。
  * - dt 是距離上一幀經過幾秒。
  *
  * 回傳 `{ position, heading, distance }`:狗在世界座標地面上的位置、狗的朝向(與遊戲核心的朝向同一個慣例),
@@ -67,7 +75,7 @@ export function createDogFollower(game) {
   let walls = readWalls()
   // 主角走過的路線,最舊的點在前面
   let trail = []
-  // 狗在路線的哪一側:1 是行進方向的右側,-1 是左側
+  // 狗在路線的哪一側:1 是行進方向的右側,-1 是左側。由主角的朝向決定,狗才會在主角的右手邊
   let side = 1
   // 狗認定的行進方向,是單位向量
   let direction = { x: 0, z: -1 }
@@ -77,7 +85,7 @@ export function createDogFollower(game) {
 
   // 剛開始還沒有走過的路線,就當作主角是從正後方一路跑過來的。狗先站在主角的右前方,主角跑起來後再退到平常的位置
   function restart(player, playerHeading) {
-    direction = { x: Math.sin(playerHeading), z: -Math.cos(playerHeading) }
+    direction = forwardOf(playerHeading)
     const behind = { x: player.x - direction.x * TRAIL_LENGTH, z: player.z - direction.z * TRAIL_LENGTH }
     trail = [slide(walls, player, behind), { ...player }]
     side = 1
@@ -127,12 +135,9 @@ export function createDogFollower(game) {
     const length = Math.hypot(dx, dz)
     if (length < MIN_DIRECTION_LENGTH) return
     const target = { x: dx / length, z: dz / length }
-    // 行進方向轉了超過九十度,例如主角往回跑時,把方向反過來並讓狗換到行進方向的另一側。
-    // 兩者一起反過來,狗偏出去的位置不變,接著只需要轉不到九十度,狗在地面上仍留在路線的同一邊
-    if (target.x * direction.x + target.z * direction.z < 0) {
-      side = -side
-      direction = { x: -direction.x, z: -direction.z }
-    }
+    // 行進方向轉了超過九十度,例如主角往回跑時,把方向反過來,接著只需要轉不到九十度。
+    // 方向不反過來的話,狗認定的行進方向會慢慢轉半圈,偏出去的狗會被甩到很遠的地方
+    if (target.x * direction.x + target.z * direction.z < 0) direction = { x: -direction.x, z: -direction.z }
     const angle = Math.atan2(
       direction.x * target.z - direction.z * target.x,
       direction.x * target.x + direction.z * target.z,
@@ -142,6 +147,20 @@ export function createDogFollower(game) {
     const cos = Math.cos(turn)
     const sin = Math.sin(turn)
     direction = { x: direction.x * cos - direction.z * sin, z: direction.x * sin + direction.z * cos }
+  }
+
+  // 行進方向與主角的朝向同向是往前跑,狗在行進方向的右側;反向是倒退,狗在左側。兩種都是主角的右手邊
+  function updateSide(playerHeading) {
+    const forward = forwardOf(playerHeading)
+    const along = direction.x * forward.x + direction.z * forward.z
+    if (Math.abs(along) > SIDE_DECISION) side = Math.sign(along)
+  }
+
+  // 狗明顯落在路線的另一側,也就是和該在的那一側隔著主角走的路線,例如主角原地轉身之後
+  function isAcross(player) {
+    const right = rightOf(direction)
+    const offset = ((position.x - player.x) * right.x + (position.z - player.z) * right.z) * side
+    return offset < -SIDE_OFFSET / 2
   }
 
   // 狗該在的位置:從路線上落後的那一點往旁邊偏出去,碰到牆就停在牆前。
@@ -174,6 +193,7 @@ export function createDogFollower(game) {
       const travelled = distanceBetween(player, lastPlayer)
       lastPlayer = { ...player }
       updateDirection(player, travelled)
+      updateSide(playerHeading)
 
       const spot = spotFor(player)
       if (distanceBetween(position, spot) > LOST_DISTANCE) {
@@ -181,8 +201,10 @@ export function createDogFollower(game) {
         return { position: { ...position }, heading, distance: 0 }
       }
       const budget = CATCH_UP * travelled
-      // 追向該在的位置時繞過主角的身體,不從主角身上穿過去,例如主角背貼著牆往回跑時
-      const chase = keepAwayFrom(player, stepToward(position, spot, budget))
+      const ahead = forwardOf(playerHeading)
+      const goal = isAcross(player) ? { x: player.x + ahead.x * CROSS_LEAD, z: player.z + ahead.z * CROSS_LEAD } : spot
+      // 追的時候繞過主角的身體,不從主角身上穿過去,例如主角背貼著牆往回跑時
+      const chase = keepAwayFrom(player, stepToward(position, goal, budget))
       const next = slide(walls, position, stepToward(position, chase, budget))
       const distance = distanceBetween(position, next)
       // 跑動的門檻與跑步動作相同。移動量太小時算出來的方向沒有意義
@@ -230,6 +252,11 @@ function keepAwayFrom(center, point) {
   if (length >= PERSONAL_SPACE || length === 0) return point
   const scale = PERSONAL_SPACE / length
   return { x: center.x + (point.x - center.x) * scale, z: center.z + (point.z - center.z) * scale }
+}
+
+// 朝向 heading 的單位向量。朝向 0 是 -z,從上方俯瞰時順時針增加
+function forwardOf(heading) {
+  return { x: Math.sin(heading), z: -Math.cos(heading) }
 }
 
 // 從上方俯瞰,方向 (x, z) 的右側是 (-z, x)
