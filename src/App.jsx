@@ -41,7 +41,6 @@ export default function App() {
     if (next.finished) setScreen('finished')
   }, [])
 
-  // 只在一局進行中的兩個畫面之間切換:遊戲中游標被放開就暫停,暫停時鎖定成功就回到遊戲中。
   // 鎖定被瀏覽器拒絕時也會收到 false,剛按「開始」或「再玩一次」的新一局因此停在暫停畫面
   const handlePointerLockChange = useCallback((locked) => {
     setScreen((current) => {
@@ -110,9 +109,8 @@ export default function App() {
   }
 
   function restart() {
-    canvasRef.current.lockPointer()
     replaceGame()
-    setScreen('playing')
+    start()
   }
 
   // 畫面留在暫停畫面,等鎖定成功才回到遊戲中。按完 Esc 立刻按「繼續」時瀏覽器會拒絕鎖定,玩家再按一次就好

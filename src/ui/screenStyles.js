@@ -43,7 +43,7 @@ export const primaryButton = {
   boxShadow: '0 4px 0 #b83d61',
 }
 
-/** 次要按鈕,例如「回到開始畫面」。它只有框線、字也比主要按鈕小,和主要按鈕放在一起時才不容易被誤按。 */
+/** 次要按鈕,給較少用、不希望被誤按的動作。它只有框線、字也比主要按鈕小,和主要按鈕放在一起時不搶眼。 */
 export const secondaryButton = {
   padding: '8px 28px',
   border: '2px solid #e3d6c8',

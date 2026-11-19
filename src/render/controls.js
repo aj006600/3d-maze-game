@@ -56,7 +56,7 @@ export function createControls(element, { onLockChange } = {}) {
   }
   function lock() {
     if (isLocked()) return
-    // 有些瀏覽器回傳 Promise、有些不回傳,所以鎖定的結果改從 pointerlockchange 與 pointerlockerror 得知。
+    // 有些瀏覽器回傳 Promise、有些不回傳,所以鎖定的結果從 pointerlockchange 與 pointerlockerror 得知。
     // 按 Esc 放開後立刻再鎖時瀏覽器會拒絕;接住 rejection,console 才不會出現 uncaught 錯誤
     Promise.resolve(element.requestPointerLock()).catch(() => {})
   }
