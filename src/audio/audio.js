@@ -1,4 +1,8 @@
-// 遊戲的聲音:載入音檔,依目前的畫面播放對應的音樂,換畫面時切換曲子,遊戲中的事件發生時播音效,並負責靜音。
+// 遊戲的聲音。這個模組負責下列幾件事:
+// - 載入音檔。
+// - 依目前的畫面播放對應的音樂,換畫面時切換曲子。
+// - 遊戲中的事件發生時播音效。
+// - 靜音。
 // 呼叫端只需要告訴它目前在哪個畫面、發生了哪個事件、有沒有靜音,怎麼播由這裡決定。遊戲核心不知道它的存在。
 //
 // 播放用 Web Audio API 而不用 <audio>:<audio loop> 每次繞回開頭都有一小段空隙,
@@ -26,16 +30,18 @@ const MUSIC = {
 }
 
 /**
- * 各事件的音效。事件每發生一次就從頭播一次,前一次還沒播完時兩次會疊在一起,音樂照樣播下去。
+ * 各事件的音效。
  *
- * - `volume` 讓音效比遊戲中的音樂稍微響一點,聽得出來,但不會蓋過音樂。
+ * - 事件每發生一次就從頭播一次。前一次還沒播完時,兩次會疊在一起播。
+ * - 音效播放時,音樂照樣播下去。
+ * - `volume` 讓音效聽得出來,又不會蓋過音樂。
  * - `delaySeconds` 是事件發生之後等多久才開始播。
  */
 const SOUNDS = {
-  collected: { url: collectedSoundUrl, volume: 0.45, delaySeconds: 0 },
+  collected: { url: collectedSoundUrl, volume: 0.35, delaySeconds: 0 },
   wrong: { url: wrongSoundUrl, volume: 0.3, delaySeconds: 0 },
   // 門只會在收集最後一個字母的那一下打開,同一下也會播收集成功的叮聲。
-  // jingle 晚 0.3 秒才播,讓叮聲先播完,兩個聲音才聽得出是分開的兩拍
+  // jingle 晚一點才播,讓叮聲先播完,兩個聲音才聽得出是分開的兩拍
   doorOpened: { url: doorOpenedSoundUrl, volume: 0.5, delaySeconds: 0.3 },
 }
 
@@ -82,8 +88,7 @@ export function createAudio() {
     return soundBuffers[name]
   }
 
-  // 從 when 開始播 buffer,when 已經過了就馬上播。每次播都接一個自己的 gain 到 master,
-  // 所以靜音同時作用於音樂與音效。播完或被停下之後,這個 gain 會從 master 拔掉
+  // 從 when 開始播 buffer,when 已經過了就馬上播。聲音一律接在 master 底下,靜音時才會一起安靜
   function startSource(buffer, { volume, loop, when }) {
     const gain = context.createGain()
     gain.gain.value = volume
@@ -110,19 +115,6 @@ export function createAudio() {
 
     const { gain, source } = startSource(buffer, { volume: MUSIC[name].volume, loop: true, when: notBefore })
     current = { gain, source, fadeOutSeconds: MUSIC[name].fadeOutSeconds }
-  }
-
-  async function playSoundOnce(name) {
-    // 延遲從事件發生的這一刻算起:第一次播時要先解碼,解碼花掉的時間不能讓兩個音效的間隔變長
-    const when = context.currentTime + SOUNDS[name].delaySeconds
-    let buffer
-    try {
-      buffer = await soundBufferOf(name)
-    } catch (error) {
-      console.error(`音效載入失敗:${SOUNDS[name].url}`, error)
-      return
-    }
-    startSource(buffer, { volume: SOUNDS[name].volume, loop: false, when })
   }
 
   // 讓正在播的那一首淡出並停下,回傳它完全安靜的時間點
@@ -156,9 +148,18 @@ export function createAudio() {
       const silentAt = fadeOutCurrent()
       if (next in MUSIC) playMusic(next, silentAt)
     },
-    playSound(event) {
+    async playSound(event) {
       if (context === null) return
-      playSoundOnce(event)
+      // 延遲從呼叫的這一刻算起:第一次播時要先解碼,解碼花掉的時間不算進延遲
+      const when = context.currentTime + SOUNDS[event].delaySeconds
+      let buffer
+      try {
+        buffer = await soundBufferOf(event)
+      } catch (error) {
+        console.error(`音效載入失敗:${SOUNDS[event].url}`, error)
+        return
+      }
+      startSource(buffer, { volume: SOUNDS[event].volume, loop: false, when })
     },
     setMuted(value) {
       muted = value
@@ -169,9 +170,9 @@ export function createAudio() {
   }
 }
 
-// 依名字開始下載 entries 裡每一個音檔
-function downloadAll(entries) {
-  return Object.fromEntries(Object.entries(entries).map(([name, { url }]) => [name, download(url)]))
+// 開始下載 table 裡的每一個音檔。回傳的物件與 table 用同樣的名字當 key
+function downloadAll(table) {
+  return Object.fromEntries(Object.entries(table).map(([name, { url }]) => [name, download(url)]))
 }
 
 function download(url) {
