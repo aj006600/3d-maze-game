@@ -8,10 +8,10 @@
 | `make test`(只跑一部分:`make test ARGS="tests/game"`) | 跑測試(Vitest),在 dev stage 容器裡(與 CI 同一個 stage) |
 | `make lint` / `make format` | lint(ESLint)/ format(Prettier) |
 | `make worktree ISSUE=<n> BRANCH=<feat/slug>` / `make worktree-rm ISSUE=<n>` | 開 / 收一個 issue 的 worktree(從主 checkout 跑,流程見 Development workflow) |
-| `make compose ARGS="..."` | 對 `make local` 那組 container 下 compose 子命令(`logs -f app`、`exec app sh`)。它帶著與 `make local` 同一組 `-f` 與 image tag;直接打 `docker compose` 會 build 出另一顆 image |
+| `make compose ARGS="..."` | 對 `make local` 那組 container 下 compose 子命令(`logs -f app`、`exec app sh`)。它帶著與 `make local` 同一個 image tag;直接打 `docker compose` 會 build 出另一顆 image |
 | `make clean` | 回收本專案的 container / volume / network、image 與 build cache,範圍以專案 label 劃定,不動到別的專案 |
 
-其餘指令:`make help`(部署用的 `make deploy` / `make down`、`make ps`)。
+其餘指令:`make help`(`make ps`)。
 
 ## Development workflow
 
@@ -21,7 +21,7 @@ Trunk-based:`main` 是唯一長期分支,所有改動走短命 feature branch �
 
 worktree 流程:主 checkout 跑 `make worktree ISSUE=<n> BRANCH=feat/<slug>`,再用 EnterWorktree 的 `path` 進 `.claude/worktrees/3d-maze-game-issue-<n>`;push 完先 ExitWorktree(keep),再從主 checkout 跑 `make worktree-rm ISSUE=<n>`。手上沒有 issue 編號就先問我。branch 刻意不追蹤 `origin/main`,第一次 push 寫明 `git push -u origin feat/<slug>`。
 
-一段工作完成後可自行 push feature branch,但**開 PR 前要先問過我**——PR 是 CI 的觸發點。PR 與 merge 進 `main` 只跑測試;打 `vX.Y.Z` tag 才 build image,再到各環境的主機用 `make deploy ENV=<env> TAG=<vX.Y.Z>` 拉同一顆 image(見 `docs/deployment.md`)。
+一段工作完成後可自行 push feature branch,但**開 PR 前要先問過我**——PR 是 CI 的觸發點。PR 與 merge 進 `main` 只跑測試、lint 與 build 檢查;打 `vX.Y.Z` tag 才把靜態檔發佈到 GitHub Pages,退回舊版是對舊的 tag 重跑發佈的 workflow(見 `docs/deployment.md`)。
 
 PR 有 conflict 時自行 `git rebase origin/main` 再 force-push 自己的 feature branch,不用問;文件表格類衝突兩邊都留,程式碼衝突解不了就停下來問。
 

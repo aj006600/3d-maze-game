@@ -2,9 +2,9 @@
 **/node_modules/
 **/dist/
 
-# env 檔一律不進版控(主機的 .env.<env>),只有範本例外
+# 遊戲不讀任何 env 檔。萬一有人放了一份,也不能進版控:
+# Vite build 時會讀 .env 檔,把 VITE_ 開頭的值寫進公開發佈的靜態檔
 .env*
-!.env.example
 *.secret
 .DS_Store
 
