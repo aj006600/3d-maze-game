@@ -1,5 +1,5 @@
 // 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、有沒有靜音,
-// 並把這兩件事告訴音訊,由它播對應的音樂。
+// 並把這兩件事與遊戲中的事件(收集、按錯、門打開)告訴音訊,由它播對應的音樂與音效。
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createAudio } from './audio/audio.js'
@@ -37,13 +37,25 @@ export default function App() {
     if (next.finished) setScreen('finished')
   }, [])
 
-  const handleInteract = useCallback((result) => {
-    if (result === 'wrong') setWrongCount((count) => count + 1)
-  }, [])
+  const handleInteract = useCallback(
+    (result) => {
+      // 在沒有字母的地方按 F 得到 null,這一下沒有任何效果,所以也不出聲
+      if (result !== null) audio.playSound(result)
+      if (result === 'wrong') setWrongCount((count) => count + 1)
+    },
+    [audio],
+  )
 
   useEffect(() => {
     audio.setScreen(screen)
   }, [audio, screen])
+
+  // 每一局開始時門都鎖著,所以 doorOpen 變成 true 就是門剛打開。
+  // 重開一局時 status 先清成 null,doorOpen 回到 false,下一局門打開時才會再播一次
+  const doorOpen = status?.doorOpen ?? false
+  useEffect(() => {
+    if (doorOpen) audio.playSound('doorOpened')
+  }, [audio, doorOpen])
 
   useEffect(() => {
     audio.setMuted(muted)

@@ -42,7 +42,7 @@ make help    # 其餘指令
 .
 ├── src/
 │   ├── App.jsx             # 首頁就是遊戲:把介面層疊在畫布上,並決定目前停在哪個畫面
-│   ├── audio/              # 音訊:依畫面播放音樂、轉場淡出與靜音(Web Audio API),音檔放在 music/
+│   ├── audio/              # 音訊:依畫面播放音樂、轉場淡出、遊戲中的音效與靜音(Web Audio API),音樂放在 music/、音效放在 sounds/
 │   ├── config.js           # 試玩後要調整的設定:seed、通關字串、祝福文字、場景比例(牆高、走道寬度)、鏡頭距離與俯仰角
 │   ├── game/               # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
 │   ├── render/             # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭、鍵鼠輸入與跟著主角跑的狗,不持有規則
@@ -62,7 +62,9 @@ make help    # 其餘指令
 
 ## Credits
 
-音樂放在 `src/audio/music/`,只用 CC0 或 CC BY 授權的音檔。
+音樂放在 `src/audio/music/`,音效放在 `src/audio/sounds/`,只用 CC0 或 CC BY 授權的音檔。
+
+### Music
 
 | 畫面 | 曲名 | 作者 | 來源 | 授權 |
 |------|------|------|------|------|
@@ -80,3 +82,13 @@ CC BY 3.0 的標註:
 - Pleasant Creek:循環版的原檔是 WAV,轉成 OGG 才能無縫循環。
 - Flowerbed Fields [Loop]:原檔的 OGG。
 - Happy Birthday Music Box:Freesound 頁面上不必登入就能下載的 HQ 預覽檔,是 Freesound 由原檔(128 kbps 的 MP3)轉出的 MP3。
+
+### Sound Effects
+
+三個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
+
+| 時機 | 檔案 | 音效包 | 來源 | 授權 |
+|------|------|--------|------|------|
+| 收集成功 | `confirmation_001.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
+| 按錯字母 | `question_004.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
+| 門打開 | `jingles_PIZZI10.ogg` | Music Jingles(Pizzicato jingles) | https://kenney.nl/assets/music-jingles | CC0 |
