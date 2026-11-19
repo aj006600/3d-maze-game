@@ -1,5 +1,5 @@
 // 開始畫面:拆開入口畫面的禮物盒之後看到的標題、目標與操作說明,讓玩家不需要別人教就能開始玩。
-// 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上,也就不會意外鎖定游標。
+// 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上。
 import { PHRASE } from '../config.js'
 import Key from './Key.jsx'
 import { backdrop, panel, primaryButton, title } from './screenStyles.js'
@@ -8,7 +8,7 @@ const CONTROL_HINTS = [
   { keys: ['W', 'A', 'S', 'D'], action: 'W 前進、S 倒退、A 與 D 橫移' },
   { keys: ['滑鼠'], action: '轉動視角,主角跟著轉向' },
   { keys: ['F'], action: '站進有字母的死路時收集字母' },
-  { keys: ['Esc'], action: '放開游標,點一下畫面就能繼續' },
+  { keys: ['Esc'], action: '暫停' },
   { keys: ['M'], action: '靜音' },
 ]
 
