@@ -18,6 +18,11 @@ export function createRandom(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 
+  /** 回傳大於等於 0、小於 1 的小數。 */
+  function float() {
+    return next()
+  }
+
   /** 回傳 0 到 n - 1 之間的整數。 */
   function int(n) {
     return Math.floor(next() * n)
@@ -39,5 +44,5 @@ export function createRandom(seed) {
     return shuffled
   }
 
-  return { int, pick, shuffle }
+  return { float, int, pick, shuffle }
 }

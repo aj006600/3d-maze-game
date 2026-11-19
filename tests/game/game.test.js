@@ -1,8 +1,9 @@
 // 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
-// 依通關字串收集字母,開門與破關,時限與挑戰失敗,以及測試用的傳送 hook。
+// 依通關字串收集字母,開門與破關,時限與挑戰失敗,測試用的傳送 hook,以及奧客的出現、遊蕩與碰撞。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { PASSENGERS, TIME_LIMITS } from '../../src/config.js'
 import { createGame } from '../../src/game/game.js'
 
 // 測試對方向的理解直接取自公開介面的契約(row 往南遞增、col 往東遞增),不沿用核心內部的對照表
@@ -35,6 +36,22 @@ function neighborsOf(maze, cell) {
 }
 
 const keyOf = (cell) => `${cell.col},${cell.row}`
+
+// 從 from 沿著迷宮的通道走到每一格要幾步。回傳以 keyOf 為 key 的 Map,走不到的格子不在裡面
+function pathDistancesFrom(maze, from) {
+  const distances = new Map([[keyOf(from), 0]])
+  const queue = [from]
+  while (queue.length > 0) {
+    const cell = queue.shift()
+    for (const next of neighborsOf(maze, cell)) {
+      if (!distances.has(keyOf(next))) {
+        distances.set(keyOf(next), distances.get(keyOf(cell)) + 1)
+        queue.push(next)
+      }
+    }
+  }
+  return distances
+}
 
 // 把一局遊戲能從公開介面讀到的配置整理成純資料,方便整局比較
 function layoutOf(game) {
@@ -82,18 +99,7 @@ describe('createGame 的迷宮', () => {
       // 連通且通道數等於格數減一,就是一棵樹:任兩格之間恰有一條路
       const passages = cells.reduce((sum, cell) => sum + maze.openings(cell).length, 0) / 2
       expect(passages, `seed ${seed}`).toBe(cells.length - 1)
-
-      const reached = new Set([keyOf(cells[0])])
-      const queue = [cells[0]]
-      while (queue.length > 0) {
-        for (const next of neighborsOf(maze, queue.shift())) {
-          if (!reached.has(keyOf(next))) {
-            reached.add(keyOf(next))
-            queue.push(next)
-          }
-        }
-      }
-      expect(reached.size, `seed ${seed}`).toBe(cells.length)
+      expect(pathDistancesFrom(maze, cells[0]).size, `seed ${seed}`).toBe(cells.length)
     }
   })
 
@@ -318,6 +324,11 @@ function wallSidesOf({ maze, door }) {
   )
 }
 
+// 有奧客離 cell 的中央不到 2.5 格。主角從這一格的中央往任何方向跑一格多的這段時間裡,
+// 奧客最多走不到一格,所以只有這樣的奧客可能擋到主角
+const isPassengerNear = (game, cell) =>
+  game.passengers.some((passenger) => Math.hypot(passenger.x - cell.col - 0.5, passenger.y - cell.row - 0.5) < 2.5)
+
 describe('主角與牆', () => {
   const COLLISION_SEEDS = SEEDS.slice(0, 5)
 
@@ -356,6 +367,8 @@ describe('主角與牆', () => {
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
       for (const wall of wallSidesOf(game)) {
+        // 這裡只看牆:主角沿著牆滑動時可能撞上附近的奧客,所以這樣的格子不測
+        if (isPassengerNear(game, wall)) continue
         game.teleport(wall)
         run(game, { forward: 1, heading: HEADINGS[wall.side] }, 1 / RUN_SPEED)
         const againstWall = game.player
@@ -376,6 +389,8 @@ describe('主角與牆', () => {
       const game = createGame(seed, { allowTeleport: true })
       for (const cell of cellsOf(game.maze)) {
         for (const side of game.maze.openings(cell)) {
+          // 這裡只看牆:主角跑進隔壁那一格時可能撞上附近的奧客,所以這樣的格子不測
+          if (isPassengerNear(game, cell)) continue
           game.teleport(cell)
           // 從格子中央跑一格的距離,停在隔壁那一格的中央
           run(game, { forward: 1, heading: HEADINGS[side] }, 1 / RUN_SPEED)
@@ -651,5 +666,344 @@ describe('傳送 hook', () => {
     const elsewhere = cellsOf(game.maze).find((cell) => keyOf(cell) !== keyOf(game.start))
     expect(() => game.teleport(elsewhere)).toThrow()
     expect(game.player).toEqual(before)
+  })
+})
+
+describe('奧客的出現', () => {
+  it('不論選哪個時限或不限時,每一局都有兩位奧客,開局時都在遊蕩,也還沒被打中過', () => {
+    for (const timeLimit of TIME_LIMITS) {
+      const { passengers } = createGame(1, { timeLimit })
+      expect(passengers, `時限 ${timeLimit}`).toHaveLength(PASSENGERS.count)
+      for (const [i, passenger] of passengers.entries()) {
+        expect(passenger.state, `時限 ${timeLimit} 第 ${i + 1} 位`).toBe('wandering')
+        expect(passenger.hits, `時限 ${timeLimit} 第 ${i + 1} 位`).toBe(0)
+      }
+    }
+  })
+
+  it('開局時各自站在一格的中央,沿著迷宮的路徑離起點至少 4 格,兩位不在同一格', () => {
+    for (const seed of SEEDS) {
+      const game = createGame(seed)
+      const distances = pathDistancesFrom(game.maze, game.start)
+      const cells = game.passengers.map(cellOf)
+      for (const [i, passenger] of game.passengers.entries()) {
+        const label = `seed ${seed} 第 ${i + 1} 位`
+        expect(passenger.x, label).toBe(cells[i].col + 0.5)
+        expect(passenger.y, label).toBe(cells[i].row + 0.5)
+        expect(distances.get(keyOf(cells[i])), label).toBeGreaterThanOrEqual(PASSENGERS.minStartDistance)
+      }
+      expect(new Set(cells.map(keyOf)).size, `seed ${seed}`).toBe(PASSENGERS.count)
+    }
+  })
+
+  it('同一個 seed 的迷宮、起點、門與字母,與加入奧客之前完全相同', () => {
+    // 以下是加入奧客之前的版本產生的配置。迷宮依 row 再 col 的順序,每格一個十六進位數字,
+    // 是該格開口的位元和:北 1、東 2、南 4、西 8。字母依 A 到 Z 的順序列出所在的格子
+    const BEFORE_PASSENGERS = [
+      {
+        seed: 1,
+        maze: '2aaeeeaaac42e917ae817a96ebc3e852ad56bc3812e9556ba86af8517ee856fc7c15781151156d782a92ed157c2aaa912911',
+        start: { col: 5, row: 5 },
+        door: { col: 9, row: 2, side: 'east' },
+        letters:
+          '6,8 9,3 1,3 9,9 0,1 9,1 3,7 3,8 8,9 9,7 0,4 4,1 1,7 6,9 4,7 0,0 0,8 6,6 3,5 0,7 1,1 1,4 9,6 9,5 0,9 9,4',
+      },
+      {
+        seed: 20261118,
+        maze: '6aaeaae8447a838416b97aaaabef847eaeec13ad57c557ee8155551553ec5517853811556d2feaac555381784111382abab8',
+        start: { col: 4, row: 5 },
+        door: { col: 5, row: 9, side: 'south' },
+        letters:
+          '2,1 4,8 1,9 9,4 4,7 8,8 5,8 8,2 9,8 3,9 7,6 9,6 4,9 6,3 2,6 8,0 4,1 8,4 4,6 8,6 9,0 6,1 5,1 0,9 7,0 7,8',
+      },
+    ]
+    const BITS = { north: 1, east: 2, south: 4, west: 8 }
+    for (const { seed, ...before } of BEFORE_PASSENGERS) {
+      const game = createGame(seed)
+      const maze = cellsOf(game.maze)
+        .map((cell) =>
+          game.maze
+            .openings(cell)
+            .reduce((sum, side) => sum + BITS[side], 0)
+            .toString(16),
+        )
+        .join('')
+      const letters = game.letters.map(keyOf).join(' ')
+      expect({ maze, start: game.start, door: game.door, letters }, `seed ${seed}`).toEqual(before)
+    }
+  })
+
+  it('同一個 seed 加同樣的推進序列,奧客的軌跡完全相同', () => {
+    // 主角也照一段固定的輸入跑來跑去,奧客與主角的碰撞也在序列裡
+    const script = [
+      [{ forward: 1, heading: 0.3 }, 2],
+      [{ right: -1, heading: 2 }, 3],
+      [{}, 20],
+      [{ forward: -1, right: 1, heading: 4 }, 5],
+    ]
+    const trajectoryOf = (seed) => {
+      const game = createGame(seed)
+      return script.flatMap(([input, seconds]) => trackPassengers(game, input, seconds))
+    }
+    for (const seed of SEEDS.slice(0, 10)) {
+      expect(trajectoryOf(seed), `seed ${seed}`).toEqual(trajectoryOf(seed))
+    }
+  })
+
+  it('奧客的快照每次讀取都是新的副本,改了它或之後的推進都不會改到別份', () => {
+    const game = createGame(1)
+    const first = game.passengers
+    const original = structuredClone(first)
+    first[0].x = -99
+    first.pop()
+    expect(game.passengers).toEqual(original)
+    run(game, {}, 5)
+    expect(first[0].x).toBe(-99)
+    expect(game.passengers).not.toEqual(original)
+  })
+})
+
+// 以每個時間步 dt 推進 seconds 秒,輸入與 run 相同;回傳開局與每一步之後的奧客快照,依時間排列
+function trackPassengers(game, input, seconds, dt = FRAME) {
+  const frames = [game.passengers]
+  for (let i = 0; i < Math.round(seconds / dt); i += 1) {
+    run(game, input, dt, dt)
+    frames.push(game.passengers)
+  }
+  return frames
+}
+
+// 主角躲進 Z 那條死路最裡面的角落:奧客走到那一格的中央也碰不到主角,所以主角擋不到任何一位奧客的路。
+// 死路只有一個開口,所以面向開口的對面再往右轉 45 度,前方與右手邊都是牆
+function hidePlayer(game) {
+  const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
+  const z = game.letters.find(({ letter }) => letter === 'Z')
+  game.teleport(z)
+  run(game, { forward: 1, heading: HEADINGS[OPPOSITE[game.maze.openings(z)[0]]] + Math.PI / 4 }, 1)
+  return game
+}
+
+// 第 i 位奧客在相鄰兩個快照之間每秒走了多遠,依時間排列
+function speedsOf(frames, i, dt = FRAME) {
+  return frames.slice(1).map((frame, k) => movementOf(frames[k][i], frame[i]).distance / dt)
+}
+
+describe('奧客的遊蕩', () => {
+  const WANDER_SPEED = PASSENGERS.wanderSpeed * RUN_SPEED
+
+  it('遊蕩的奧客會走動,走路的速度是遊蕩的速度,不會更快', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const frames = trackPassengers(createGame(seed), {}, 30)
+      for (let i = 0; i < PASSENGERS.count; i += 1) {
+        const fastest = Math.max(...speedsOf(frames, i))
+        expect(fastest, `seed ${seed} 第 ${i + 1} 位`).toBeCloseTo(WANDER_SPEED)
+        expect(fastest, `seed ${seed} 第 ${i + 1} 位`).toBeLessThanOrEqual(WANDER_SPEED + 1e-9)
+      }
+    }
+  })
+
+  it('推進再久,奧客都留在迷宮裡,身體也不會插進牆裡;門打開之後也一樣', () => {
+    // 點到一段牆的最短距離,點在牆裡時是 0
+    const clearanceOf = (wall, { x, y }) =>
+      Math.hypot(Math.max(wall.minX - x, 0, x - wall.maxX), Math.max(wall.minY - y, 0, y - wall.maxY))
+    let enteredDoorCell = false
+    for (const seed of SEEDS.slice(0, 10)) {
+      const game = createGame(seed, { allowTeleport: true })
+      collectFirst(game, 13)
+      const { maze, walls, door } = game
+      const positions = trackPassengers(game, {}, 10 * 60, 0.1).flat()
+      const escaped = positions.find(
+        (passenger) =>
+          !(passenger.x >= 0 && passenger.x < maze.size && passenger.y >= 0 && passenger.y < maze.size) ||
+          walls.some((wall) => clearanceOf(wall, passenger) < PASSENGERS.radius - 1e-9),
+      )
+      expect(escaped, `seed ${seed}`).toBeUndefined()
+      if (positions.some((passenger) => keyOf(cellOf(passenger)) === keyOf(door))) enteredDoorCell = true
+    }
+    // 至少要有奧客在門打開之後走進門所在的那一格,門那一側的規則才有被考驗到
+    expect(enteredDoorCell).toBe(true)
+  })
+
+  it('遊蕩的奧客走得到迷宮的每一格,包括有字母的死路與門所在的那一格', () => {
+    for (const seed of SEEDS.slice(0, 3)) {
+      const game = hidePlayer(createGame(seed, { allowTeleport: true }))
+      const visited = new Set(trackPassengers(game, {}, 60 * 60, 0.1).flatMap((frame) => frame.map(cellOf).map(keyOf)))
+      expect(visited.size, `seed ${seed}`).toBe(game.maze.size * game.maze.size)
+    }
+  })
+
+  it('遊蕩的奧客偶爾在一格的中央停下來,站幾秒再繼續走', () => {
+    const [shortest, longest] = PASSENGERS.pauseSeconds
+    for (const seed of SEEDS.slice(0, 5)) {
+      const frames = trackPassengers(hidePlayer(createGame(seed, { allowTeleport: true })), {}, 120)
+      for (let i = 0; i < PASSENGERS.count; i += 1) {
+        // 每一段站著不動的時間:從停下的那一步到再走起來的前一步,最後還沒走起來的那一段不算
+        const pauses = []
+        let since = 0
+        for (let k = 1; k < frames.length; k += 1) {
+          if (movementOf(frames[k - 1][i], frames[k][i]).distance > 0) {
+            if (k - 1 > since) pauses.push({ position: frames[since][i], seconds: (k - 1 - since) * FRAME })
+            since = k
+          }
+        }
+        const atCenter = ({ x, y }) => x % 1 === 0.5 && y % 1 === 0.5
+        // 停下來的那一步與走起來的那一步各有一部分時間在走路,所以量到的秒數最多比實際少一步
+        const paused = pauses.some(
+          ({ position, seconds }) => atCenter(position) && seconds >= shortest - FRAME && seconds <= longest,
+        )
+        expect(paused, `seed ${seed} 第 ${i + 1} 位`).toBe(true)
+      }
+    }
+  })
+
+  it('遊蕩的奧客只在死路裡原路退出,沒有被擋住時不會在其他格子折返', () => {
+    for (const seed of SEEDS.slice(0, 5)) {
+      const game = hidePlayer(createGame(seed, { allowTeleport: true }))
+      const frames = trackPassengers(game, {}, 120)
+      // 兩位奧客靠得這麼近,就是被對方擋住了
+      const crowded = (frame) => movementOf(frame[0], frame[1]).distance < 2 * PASSENGERS.radius + 0.01
+      for (let i = 0; i < PASSENGERS.count; i += 1) {
+        // 依序經過的格子,以及走進每一格的那一步
+        const visits = []
+        frames.forEach((frame, k) => {
+          const cell = cellOf(frame[i])
+          if (visits.length === 0 || keyOf(visits.at(-1).cell) !== keyOf(cell)) visits.push({ cell, k })
+        })
+        for (let v = 2; v < visits.length; v += 1) {
+          if (keyOf(visits[v].cell) !== keyOf(visits[v - 2].cell)) continue
+          const turn = visits[v - 1]
+          const label = `seed ${seed} 第 ${i + 1} 位在 ${keyOf(turn.cell)} 折返`
+          const blocked = frames.slice(turn.k, visits[v].k + 1).some(crowded)
+          expect(game.maze.openings(turn.cell).length === 1 || blocked, label).toBe(true)
+        }
+      }
+    }
+  })
+})
+
+const sideOf = (direction) =>
+  Object.keys(OFFSETS).find((side) => OFFSETS[side].col === direction.col && OFFSETS[side].row === direction.row)
+
+// 讓第一位奧客走到主角面前停下。主角先躲起來,等奧客剛走出一格的中央,再把主角傳送到奧客正要走進的那一格的中央,
+// 然後推進到奧客走到主角面前。回傳主角所在的格子,以及奧客走過來的方向 `{ col, row }`
+function meetFirstPassenger(game) {
+  hidePlayer(game)
+  for (let i = 0; i < 60 / FRAME; i += 1) {
+    run(game, {}, FRAME)
+    const [passenger] = game.passengers
+    // 走動中的奧客朝著正要走進的那一格
+    const direction = { col: Math.round(Math.sin(passenger.heading)), row: Math.round(-Math.cos(passenger.heading)) }
+    const from = cellOf(passenger)
+    const progress = (passenger.x - from.col - 0.5) * direction.col + (passenger.y - from.row - 0.5) * direction.row
+    if (progress > 0 && progress < 0.25) {
+      const cell = stepOf(from, sideOf(direction))
+      game.teleport(cell)
+      // 奧客離主角還有大半格,走過來不到兩秒
+      run(game, {}, 2)
+      return { cell, direction }
+    }
+  }
+  throw new Error('第一位奧客一直沒有走出格子的中央')
+}
+
+describe('奧客的碰撞', () => {
+  const COLLISION_SEEDS = SEEDS.slice(0, 10)
+
+  it('奧客走到主角面前就停下,不會把主角推開', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { cell } = meetFirstPassenger(game)
+      const [passenger] = game.passengers
+      run(game, {}, 3)
+      expect(game.player, `seed ${seed}`).toMatchObject({ x: cell.col + 0.5, y: cell.row + 0.5 })
+      expect(game.passengers[0], `seed ${seed}`).toEqual(passenger)
+      expect(movementOf(passenger, game.player).distance, `seed ${seed}`).toBeGreaterThan(PASSENGERS.radius)
+    }
+  })
+
+  it('主角朝奧客跑時被擋住,推不動他', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { direction } = meetFirstPassenger(game)
+      const [passenger] = game.passengers
+      run(game, { forward: 1, heading: HEADINGS[sideOf({ col: -direction.col, row: -direction.row })] }, 1)
+      expect(game.passengers[0], `seed ${seed}`).toEqual(passenger)
+      // 沿著奧客走過來的方向量,主角還在奧客的前方,沒有穿過他
+      const ahead = (game.player.x - passenger.x) * direction.col + (game.player.y - passenger.y) * direction.row
+      expect(ahead, `seed ${seed}`).toBeGreaterThan(0)
+    }
+  })
+
+  it('主角斜著撞上奧客時,沿著他的邊緣滑動', () => {
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { direction } = meetFirstPassenger(game)
+      const before = game.player
+      // 朝奧客再往右偏 45 度跑一小段。主角一讓開,奧客就照自己的路繼續走,所以這裡只看主角
+      const facing = HEADINGS[sideOf({ col: -direction.col, row: -direction.row })]
+      run(game, { forward: 1, heading: facing + Math.PI / 4 }, 0.3)
+      const sideways = Math.abs((game.player.x - before.x) * direction.row - (game.player.y - before.y) * direction.col)
+      expect(sideways, `seed ${seed}`).toBeGreaterThan(0.1)
+    }
+  })
+
+  it('奧客站在走道中央時,主角貼著走道的一側也鑽不過去', () => {
+    // 從上方俯瞰,順時針與逆時針轉九十度的那一側
+    const CLOCKWISE = { north: 'east', east: 'south', south: 'west', west: 'north' }
+    const COUNTERCLOCKWISE = { north: 'west', east: 'north', south: 'east', west: 'south' }
+    let tested = 0
+    for (const seed of COLLISION_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { cell, direction } = meetFirstPassenger(game)
+      const facing = sideOf({ col: -direction.col, row: -direction.row })
+      // 奧客站在主角這一格裡,走道兩側要有一側是牆,主角才貼得上去
+      const side = [CLOCKWISE[facing], COUNTERCLOCKWISE[facing]].find(
+        (side) => !game.maze.openings(cell).includes(side),
+      )
+      if (side === undefined) continue
+      tested += 1
+      // 先橫移貼上那一側的牆,再朝奧客跑。主角讓開時奧客會往前走,碰到主角又停下
+      run(game, { right: side === CLOCKWISE[facing] ? 1 : -1, heading: HEADINGS[facing] }, 0.5)
+      run(game, { forward: 1, heading: HEADINGS[facing] }, 1)
+      const [passenger] = game.passengers
+      const ahead = (game.player.x - passenger.x) * direction.col + (game.player.y - passenger.y) * direction.row
+      expect(ahead, `seed ${seed}`).toBeGreaterThan(0)
+    }
+    expect(tested).toBeGreaterThan(0)
+  })
+
+  it('兩位奧客互相擋住,不會重疊', () => {
+    let closest = Infinity
+    for (const seed of COLLISION_SEEDS) {
+      const distances = trackPassengers(hidePlayer(createGame(seed, { allowTeleport: true })), {}, 10 * 60, 0.1).map(
+        (frame) => movementOf(frame[0], frame[1]).distance,
+      )
+      expect(Math.min(...distances), `seed ${seed}`).toBeGreaterThanOrEqual(2 * PASSENGERS.radius - 1e-9)
+      closest = Math.min(closest, ...distances)
+    }
+    // 至少要有一次兩位碰在一起,這條規則才有被考驗到
+    expect(closest).toBeLessThan(2 * PASSENGERS.radius + 0.01)
+  })
+})
+
+describe('奧客與一局的結束', () => {
+  it('挑戰失敗之後,推進不會讓奧客移動', () => {
+    const game = createGame(1, { timeLimit: 300 })
+    run(game, {}, 300, 1)
+    expect(game.failed).toBe(true)
+    const passengers = game.passengers
+    run(game, {}, 60)
+    expect(game.passengers).toEqual(passengers)
+  })
+
+  it('破關之後,推進不會讓奧客移動', () => {
+    const game = createGame(1, { allowTeleport: true })
+    collectFirst(game, 13)
+    game.teleport(game.door)
+    run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1 / RUN_SPEED)
+    expect(game.finished).toBe(true)
+    const passengers = game.passengers
+    run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 60)
+    expect(game.passengers).toEqual(passengers)
   })
 })

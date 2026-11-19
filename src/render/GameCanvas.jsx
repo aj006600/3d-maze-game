@@ -9,6 +9,7 @@ import { createDogFollower } from './dogFollower.js'
 import { createFollowCamera } from './followCamera.js'
 import { createLetterFigures } from './letterFigures.js'
 import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
+import { createPassengerFigure } from './passengerFigure.js'
 import { createPlayerFigure } from './playerFigure.js'
 
 // 一幀最多推進幾秒。分頁切走時動畫迴圈會停下,切回來的第一幀不該讓主角一口氣跑出一大段。
@@ -122,6 +123,12 @@ const GameCanvas = forwardRef(function GameCanvas(
     mazeScene.scene.add(figure.object)
     const dogFigure = createDogFigure()
     mazeScene.scene.add(dogFigure.object)
+    // 一局裡奧客的人數固定,所以造型在開局時照人數建好
+    const passengerFigures = game.passengers.map(() => {
+      const passengerFigure = createPassengerFigure()
+      mazeScene.scene.add(passengerFigure.object)
+      return passengerFigure
+    })
     const dogFollower = createDogFollower(game)
     const followCamera = createFollowCamera(game)
     const { camera } = followCamera
@@ -136,6 +143,7 @@ const GameCanvas = forwardRef(function GameCanvas(
       lastTime = time
 
       const before = game.player
+      const passengersBefore = game.passengers
       const { pitch, interactions, ...input } = controls.read()
       if (activeRef.current && controls.isLocked()) {
         game.step({ ...input, dt })
@@ -175,6 +183,11 @@ const GameCanvas = forwardRef(function GameCanvas(
       const dogPose = dogFollower.follow(position, player.heading, dt)
       dogFigure.place(dogPose.position, dogPose.heading)
       dogFigure.animate(dogPose.distance, dt)
+      game.passengers.forEach((passenger, i) => {
+        const { x, y } = passengersBefore[i]
+        passengerFigures[i].place(toWorld(game.maze, passenger), passenger.heading)
+        passengerFigures[i].animate(Math.hypot(passenger.x - x, passenger.y - y) * CELL_SIZE, dt)
+      })
       letterFigures.animate(time / 1000, camera.position)
 
       renderer.render(mazeScene.scene, camera)
@@ -185,6 +198,7 @@ const GameCanvas = forwardRef(function GameCanvas(
       cameraRef.current = null
       figure.dispose()
       dogFigure.dispose()
+      for (const passengerFigure of passengerFigures) passengerFigure.dispose()
       letterFigures.dispose()
       mazeScene.dispose()
     }
