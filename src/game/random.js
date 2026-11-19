@@ -10,17 +10,13 @@
 export function createRandom(seed) {
   let state = seed >>> 0
 
+  /** 回傳大於等於 0、小於 1 的小數。 */
   function next() {
     state = (state + 0x6d2b79f5) >>> 0
     let t = state
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-
-  /** 回傳大於等於 0、小於 1 的小數。 */
-  function float() {
-    return next()
   }
 
   /** 回傳 0 到 n - 1 之間的整數。 */
@@ -44,5 +40,5 @@ export function createRandom(seed) {
     return shuffled
   }
 
-  return { float, int, pick, shuffle }
+  return { float: next, int, pick, shuffle }
 }

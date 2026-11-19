@@ -1,4 +1,4 @@
-// 奧客:開局時站在哪裡、怎麼遊蕩,以及他們與牆、主角、彼此之間的碰撞。
+// 奧客:開局時站在哪裡、怎麼遊蕩,以及他們與主角、彼此之間的碰撞。
 // 奧客只由每一次推進帶動,經過的時間就是推進的秒數,不讀時鐘;用到的隨機全部來自這一局的亂數產生器。
 //
 // 遊蕩的奧客沿著格子中央的連線一格一格走:每走到一格的中央,就從來路以外的開口隨機挑一個走出去,
@@ -12,7 +12,7 @@
 // - 被主角擋住時,站在原地等主角讓開。
 // - 被另一位奧客擋住時掉頭往回走,兩位才不會在走道上面對面僵住。
 import { PASSENGERS } from '../config.js'
-import { OFFSETS } from './maze.js'
+import { isSameCell, OFFSETS, stepOf } from './maze.js'
 import { moveCircle, PLAYER_RADIUS } from './movement.js'
 
 // 一次推進剩下不到這麼多秒時就算用完,浮點誤差留下的零頭不會讓迴圈多繞一圈
@@ -33,8 +33,7 @@ const TIME_EPSILON = 1e-9
 export function createPassengers({ maze, start, random, runSpeed }) {
   const wanderSpeed = PASSENGERS.wanderSpeed * runSpeed
   const passengers = spawnCellsOf(maze, start, random).map((cell) => ({
-    x: cell.col + 0.5,
-    y: cell.row + 0.5,
+    ...centerOf(cell),
     heading: 0,
     state: 'wandering',
     hits: 0,
@@ -46,7 +45,10 @@ export function createPassengers({ maze, start, random, runSpeed }) {
   }))
   for (const passenger of passengers) arrive(passenger)
 
-  // 奧客剛好站在 target 的中央:挑下一格、決定要不要先停一下,並轉向下一格
+  // 奧客剛好站在 target 的中央時呼叫。它做三件事:
+  // - 挑下一格。
+  // - 轉向下一格。
+  // - 決定要不要先在原地站一會兒。
   function arrive(passenger) {
     const { target, origin } = passenger
     const openings = maze.openings(target)
@@ -105,19 +107,19 @@ export function createPassengers({ maze, start, random, runSpeed }) {
     }
   }
 
-  const bodyOf = ({ x, y }) => ({ x, y, radius: PASSENGERS.radius })
-
   return {
     snapshot() {
       return passengers.map(({ x, y, heading, state, hits }) => ({ x, y, heading, state, hits }))
     },
     bodies() {
-      return passengers.map(bodyOf)
+      return passengers.map((passenger) => bodyOf(passenger, PASSENGERS.radius))
     },
     step(dt, player) {
-      const playerBody = { x: player.x, y: player.y, radius: PLAYER_RADIUS }
+      const playerBody = bodyOf(player, PLAYER_RADIUS)
       for (const passenger of passengers) {
-        const others = passengers.filter((other) => other !== passenger).map(bodyOf)
+        const others = passengers
+          .filter((other) => other !== passenger)
+          .map((other) => bodyOf(other, PASSENGERS.radius))
         advance(passenger, dt, { obstacles: [playerBody, ...others], playerBody })
       }
     },
@@ -126,38 +128,30 @@ export function createPassengers({ maze, start, random, runSpeed }) {
 
 // 從沿著路徑離起點夠遠的格子裡隨機挑出每一位奧客開局的格子,兩位不會挑到同一格
 function spawnCellsOf(maze, start, random) {
-  const distances = pathDistancesFrom(maze, start)
-  const candidates = []
-  for (let row = 0; row < maze.size; row += 1) {
-    for (let col = 0; col < maze.size; col += 1) {
-      if (distances[row * maze.size + col] >= PASSENGERS.minStartDistance) candidates.push({ col, row })
-    }
-  }
+  const candidates = pathDistancesFrom(maze, start)
+    .filter(({ distance }) => distance >= PASSENGERS.minStartDistance)
+    .map(({ cell }) => cell)
   return random.shuffle(candidates).slice(0, PASSENGERS.count)
 }
 
-// 從 from 沿著迷宮的通道走到每一格要幾步,依 row * size + col 的順序排列
+// 從 from 沿著迷宮的通道走到每一格要幾步。回傳每一格的 `{ cell, distance }`,依離 from 由近到遠排列
 function pathDistancesFrom(maze, from) {
-  const distances = new Array(maze.size * maze.size).fill(Infinity)
-  distances[from.row * maze.size + from.col] = 0
-  const queue = [from]
-  while (queue.length > 0) {
-    const cell = queue.shift()
-    const distance = distances[cell.row * maze.size + cell.col]
+  const reached = [{ cell: from, previous: null, distance: 0 }]
+  for (let i = 0; i < reached.length; i += 1) {
+    const { cell, previous, distance } = reached[i]
     for (const side of maze.openings(cell)) {
       const next = stepOf(cell, side)
-      const index = next.row * maze.size + next.col
-      if (distances[index] === Infinity) {
-        distances[index] = distance + 1
-        queue.push(next)
-      }
+      // 迷宮沒有迴圈,所以只要不走回剛離開的那一格,就不會走到已經走過的格子
+      if (previous === null || !isSameCell(next, previous))
+        reached.push({ cell: next, previous: cell, distance: distance + 1 })
     }
   }
-  return distances
+  return reached
 }
 
-function stepOf(cell, side) {
-  return { col: cell.col + OFFSETS[side].col, row: cell.row + OFFSETS[side].row }
+// 擋路用的圓:圓心在 `{ x, y }`,半徑是 radius
+function bodyOf({ x, y }, radius) {
+  return { x, y, radius }
 }
 
 function centerOf({ col, row }) {
@@ -167,8 +161,4 @@ function centerOf({ col, row }) {
 // 朝 (col, row) 這個方向的朝向,與遊戲核心的慣例相同:0 朝北,從上方俯瞰時順時針增加
 function headingOf({ col, row }) {
   return Math.atan2(col, -row)
-}
-
-function isSameCell(a, b) {
-  return a.col === b.col && a.row === b.row
 }

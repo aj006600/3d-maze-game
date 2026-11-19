@@ -40,7 +40,8 @@ export function wallsOf(maze, openDoor) {
 /**
  * 把半徑 radius 的圓從 position 往 (dx, dy) 推進,回傳 `{ x, y, blocker }`。
  *
- * walls 是擋住它的牆,不給就是沒有牆。碰到牆時只保留沿著牆面的那一段移動,所以正面撞牆會停下,斜向撞牆會沿牆滑動。
+ * walls 是擋住它的牆。沒有給 walls 時,它不會被任何牆擋住。
+ * 碰到牆時只保留沿著牆面的那一段移動,所以正面撞牆會停下,斜向撞牆會沿牆滑動。
  * obstacles 是擋住它、但推不動的身體,各是一個圓 `{ x, y, radius }`:
  * - slide 為 true 時,碰到身體就沿著它的邊緣滑動。夾在身體與牆之間、或夾在兩個身體之間滑不過去時,停在碰到之前。
  * - slide 為 false 時,碰到身體就停在碰到之前。

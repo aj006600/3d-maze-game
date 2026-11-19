@@ -34,7 +34,7 @@ export function generateMaze(size, random) {
     const activeIndex = random.int(active.length)
     const cell = active[activeIndex]
     const choices = SIDES.filter((side) => {
-      const next = step(cell, side)
+      const next = stepOf(cell, side)
       return inside(next) && !visited.has(indexOf(next))
     })
 
@@ -46,7 +46,7 @@ export function generateMaze(size, random) {
     }
 
     const side = random.pick(choices)
-    const next = step(cell, side)
+    const next = stepOf(cell, side)
     openSides[indexOf(cell)].add(side)
     openSides[indexOf(next)].add(OPPOSITE[side])
     visited.add(indexOf(next))
@@ -70,6 +70,12 @@ export function deadEndsOf(maze) {
   return deadEnds
 }
 
-function step(cell, side) {
+/** 從 cell 往 side 那一側走一格到達的格子。不檢查那一側有沒有通道,也不檢查到達的格子在不在迷宮內。 */
+export function stepOf(cell, side) {
   return { col: cell.col + OFFSETS[side].col, row: cell.row + OFFSETS[side].row }
+}
+
+/** 兩個 `{ col, row }` 是不是同一格。 */
+export function isSameCell(a, b) {
+  return a.col === b.col && a.row === b.row
 }

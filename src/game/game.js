@@ -2,7 +2,7 @@
 // 有時限的一局,倒數歸零時還沒破關就是挑戰失敗。迷宮裡有奧客在遊蕩,他們的身體會擋住主角。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
 import { PHRASE } from '../config.js'
-import { deadEndsOf, generateMaze } from './maze.js'
+import { deadEndsOf, generateMaze, isSameCell } from './maze.js'
 import { moveCircle, PLAYER_RADIUS, wallsOf } from './movement.js'
 import { createPassengers } from './passengers.js'
 import { createRandom } from './random.js'
@@ -149,7 +149,7 @@ export function createGame(seed, { allowTeleport = false, timeLimit = null } = {
         // 門是外牆上唯一能打開的缺口,所以主角離開迷宮的格子,就是從打開的門走出去了
         if (!isInside(maze, player)) finished = true
       }
-      // 破關之後奧客不再動。挑戰失敗之後連這裡都走不到
+      // 挑戰失敗之後,這個方法一開始就回傳了,所以這裡只需要擋破關
       if (!finished) passengers.step(dt, player)
       // 移動並判定破關之後才判定倒數歸零:走出門的那一步剛好用完時間時算破關
       if (countdown === 0 && !finished) failed = true
@@ -215,8 +215,4 @@ function cellOf({ x, y }) {
 
 function isInside(maze, { x, y }) {
   return x >= 0 && x < maze.size && y >= 0 && y < maze.size
-}
-
-function isSameCell(a, b) {
-  return a.col === b.col && a.row === b.row
 }

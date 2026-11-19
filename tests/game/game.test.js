@@ -218,6 +218,9 @@ const cellOf = (player) => ({ col: Math.floor(player.x), row: Math.floor(player.
 
 // 朝向的契約:弧度,0 朝北,從上方俯瞰時順時針增加
 const HEADINGS = { north: 0, east: Math.PI / 2, south: Math.PI, west: (3 * Math.PI) / 2 }
+const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
+// 從上方俯瞰,順時針轉九十度的那一側。面向某一側時,右手邊就是這一側
+const CLOCKWISE = { north: 'east', east: 'south', south: 'west', west: 'north' }
 
 const FRAME = 1 / 60
 
@@ -324,10 +327,20 @@ function wallSidesOf({ maze, door }) {
   )
 }
 
-// 有奧客離 cell 的中央不到 2.5 格。主角從這一格的中央往任何方向跑一格多的這段時間裡,
-// 奧客最多走不到一格,所以只有這樣的奧客可能擋到主角
+// 有奧客離 cell 的中央不到 2.5 格。等奧客走開的那幾條測試讓主角在 cell 附近跑不到兩秒,
+// 主角離 cell 的中央不超過一格;這段時間裡奧客最多走一格多一點,所以只有這樣的奧客可能擋到主角
 const isPassengerNear = (game, cell) =>
   game.passengers.some((passenger) => Math.hypot(passenger.x - cell.col - 0.5, passenger.y - cell.row - 0.5) < 2.5)
+
+// 只看主角的測試用它先把奧客請開:主角躲起來推進一會兒,直到沒有奧客在 cell 附近。
+// 主角躲起來時擋不到任何一位奧客,遊蕩的奧客遲早會走開,但可能在死路多的地方繞上一兩分鐘
+function waitForPassengersToLeave(game, cell) {
+  for (let i = 0; i < 10 * 60; i += 1) {
+    if (!isPassengerNear(game, cell)) return
+    hidePlayer(game)
+  }
+  throw new Error(`奧客一直待在 ${keyOf(cell)} 附近`)
+}
 
 describe('主角與牆', () => {
   const COLLISION_SEEDS = SEEDS.slice(0, 5)
@@ -362,13 +375,12 @@ describe('主角與牆', () => {
   })
 
   it('斜向撞牆時沿著牆滑動,不會整個卡住', () => {
-    // 從上方俯瞰,順時針轉九十度的那一側;面向牆時往右斜跑,就是往這一側滑
-    const CLOCKWISE = { north: 'east', east: 'south', south: 'west', west: 'north' }
+    // 面向牆時往右斜跑,就是往 CLOCKWISE 的那一側滑
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
       for (const wall of wallSidesOf(game)) {
-        // 這裡只看牆:主角沿著牆滑動時可能撞上附近的奧客,所以這樣的格子不測
-        if (isPassengerNear(game, wall)) continue
+        // 這裡只看牆:主角沿著牆滑動時可能撞上附近的奧客,所以先等奧客走開
+        waitForPassengersToLeave(game, wall)
         game.teleport(wall)
         run(game, { forward: 1, heading: HEADINGS[wall.side] }, 1 / RUN_SPEED)
         const againstWall = game.player
@@ -389,8 +401,8 @@ describe('主角與牆', () => {
       const game = createGame(seed, { allowTeleport: true })
       for (const cell of cellsOf(game.maze)) {
         for (const side of game.maze.openings(cell)) {
-          // 這裡只看牆:主角跑進隔壁那一格時可能撞上附近的奧客,所以這樣的格子不測
-          if (isPassengerNear(game, cell)) continue
+          // 這裡只看牆:主角跑進隔壁那一格時可能撞上附近的奧客,所以先等奧客走開
+          waitForPassengersToLeave(game, cell)
           game.teleport(cell)
           // 從格子中央跑一格的距離,停在隔壁那一格的中央
           run(game, { forward: 1, heading: HEADINGS[side] }, 1 / RUN_SPEED)
@@ -471,10 +483,11 @@ describe('收集', () => {
   })
 
   it('只是走進字母所在的死路再走出來,沒有互動就沒有任何效果', () => {
-    const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
     for (const seed of SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
       const h = game.letters.find(({ letter }) => letter === 'H')
+      // 這裡只看收集:主角跑進死路時可能撞上附近的奧客,所以先等奧客走開
+      waitForPassengersToLeave(game, h)
       const [opening] = game.maze.openings(h)
       // 從死路開口外的那一格出發,跑進字母那一格的中央再跑回來
       game.teleport(stepOf(h, opening))
@@ -776,16 +789,15 @@ function trackPassengers(game, input, seconds, dt = FRAME) {
 // 主角躲進 Z 那條死路最裡面的角落:奧客走到那一格的中央也碰不到主角,所以主角擋不到任何一位奧客的路。
 // 死路只有一個開口,所以面向開口的對面再往右轉 45 度,前方與右手邊都是牆
 function hidePlayer(game) {
-  const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' }
   const z = game.letters.find(({ letter }) => letter === 'Z')
   game.teleport(z)
   run(game, { forward: 1, heading: HEADINGS[OPPOSITE[game.maze.openings(z)[0]]] + Math.PI / 4 }, 1)
   return game
 }
 
-// 第 i 位奧客在相鄰兩個快照之間每秒走了多遠,依時間排列
-function speedsOf(frames, i, dt = FRAME) {
-  return frames.slice(1).map((frame, k) => movementOf(frames[k][i], frame[i]).distance / dt)
+// 第 i 位奧客在相鄰兩個快照之間每秒走了多遠,依時間排列。快照要以 FRAME 為時間步
+function speedsOf(frames, i) {
+  return frames.slice(1).map((frame, k) => movementOf(frames[k][i], frame[i]).distance / FRAME)
 }
 
 describe('奧客的遊蕩', () => {
@@ -884,8 +896,15 @@ describe('奧客的遊蕩', () => {
 const sideOf = (direction) =>
   Object.keys(OFFSETS).find((side) => OFFSETS[side].col === direction.col && OFFSETS[side].row === direction.row)
 
+// 沿著 direction `{ col, row }` 量,point 在 origin 前方多遠;在後方時是負的
+const aheadAlong = (direction, origin, point) =>
+  (point.x - origin.x) * direction.col + (point.y - origin.y) * direction.row
+
 // 讓第一位奧客走到主角面前停下。主角先躲起來,等奧客剛走出一格的中央,再把主角傳送到奧客正要走進的那一格的中央,
-// 然後推進到奧客走到主角面前。回傳主角所在的格子,以及奧客走過來的方向 `{ col, row }`
+// 然後推進到奧客走到主角面前。回傳:
+// - cell:主角所在的格子。
+// - direction:奧客走過來的方向 `{ col, row }`。
+// - facing:主角面向奧客時朝著哪一側。
 function meetFirstPassenger(game) {
   hidePlayer(game)
   for (let i = 0; i < 60 / FRAME; i += 1) {
@@ -894,13 +913,13 @@ function meetFirstPassenger(game) {
     // 走動中的奧客朝著正要走進的那一格
     const direction = { col: Math.round(Math.sin(passenger.heading)), row: Math.round(-Math.cos(passenger.heading)) }
     const from = cellOf(passenger)
-    const progress = (passenger.x - from.col - 0.5) * direction.col + (passenger.y - from.row - 0.5) * direction.row
+    const progress = aheadAlong(direction, { x: from.col + 0.5, y: from.row + 0.5 }, passenger)
     if (progress > 0 && progress < 0.25) {
       const cell = stepOf(from, sideOf(direction))
       game.teleport(cell)
       // 奧客離主角還有大半格,走過來不到兩秒
       run(game, {}, 2)
-      return { cell, direction }
+      return { cell, direction, facing: OPPOSITE[sideOf(direction)] }
     }
   }
   throw new Error('第一位奧客一直沒有走出格子的中央')
@@ -924,50 +943,41 @@ describe('奧客的碰撞', () => {
   it('主角朝奧客跑時被擋住,推不動他', () => {
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
-      const { direction } = meetFirstPassenger(game)
+      const { direction, facing } = meetFirstPassenger(game)
       const [passenger] = game.passengers
-      run(game, { forward: 1, heading: HEADINGS[sideOf({ col: -direction.col, row: -direction.row })] }, 1)
+      run(game, { forward: 1, heading: HEADINGS[facing] }, 1)
       expect(game.passengers[0], `seed ${seed}`).toEqual(passenger)
       // 沿著奧客走過來的方向量,主角還在奧客的前方,沒有穿過他
-      const ahead = (game.player.x - passenger.x) * direction.col + (game.player.y - passenger.y) * direction.row
-      expect(ahead, `seed ${seed}`).toBeGreaterThan(0)
+      expect(aheadAlong(direction, passenger, game.player), `seed ${seed}`).toBeGreaterThan(0)
     }
   })
 
   it('主角斜著撞上奧客時,沿著他的邊緣滑動', () => {
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
-      const { direction } = meetFirstPassenger(game)
+      const { direction, facing } = meetFirstPassenger(game)
       const before = game.player
       // 朝奧客再往右偏 45 度跑一小段。主角一讓開,奧客就照自己的路繼續走,所以這裡只看主角
-      const facing = HEADINGS[sideOf({ col: -direction.col, row: -direction.row })]
-      run(game, { forward: 1, heading: facing + Math.PI / 4 }, 0.3)
+      run(game, { forward: 1, heading: HEADINGS[facing] + Math.PI / 4 }, 0.3)
       const sideways = Math.abs((game.player.x - before.x) * direction.row - (game.player.y - before.y) * direction.col)
       expect(sideways, `seed ${seed}`).toBeGreaterThan(0.1)
     }
   })
 
   it('奧客站在走道中央時,主角貼著走道的一側也鑽不過去', () => {
-    // 從上方俯瞰,順時針與逆時針轉九十度的那一側
-    const CLOCKWISE = { north: 'east', east: 'south', south: 'west', west: 'north' }
-    const COUNTERCLOCKWISE = { north: 'west', east: 'north', south: 'east', west: 'south' }
     let tested = 0
     for (const seed of COLLISION_SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
-      const { cell, direction } = meetFirstPassenger(game)
-      const facing = sideOf({ col: -direction.col, row: -direction.row })
-      // 奧客站在主角這一格裡,走道兩側要有一側是牆,主角才貼得上去
-      const side = [CLOCKWISE[facing], COUNTERCLOCKWISE[facing]].find(
-        (side) => !game.maze.openings(cell).includes(side),
-      )
+      const { cell, direction, facing } = meetFirstPassenger(game)
+      // 奧客站在主角這一格裡,走道左右兩側要有一側是牆,主角才貼得上去
+      const right = CLOCKWISE[facing]
+      const side = [right, OPPOSITE[right]].find((side) => !game.maze.openings(cell).includes(side))
       if (side === undefined) continue
       tested += 1
       // 先橫移貼上那一側的牆,再朝奧客跑。主角讓開時奧客會往前走,碰到主角又停下
-      run(game, { right: side === CLOCKWISE[facing] ? 1 : -1, heading: HEADINGS[facing] }, 0.5)
+      run(game, { right: side === right ? 1 : -1, heading: HEADINGS[facing] }, 0.5)
       run(game, { forward: 1, heading: HEADINGS[facing] }, 1)
-      const [passenger] = game.passengers
-      const ahead = (game.player.x - passenger.x) * direction.col + (game.player.y - passenger.y) * direction.row
-      expect(ahead, `seed ${seed}`).toBeGreaterThan(0)
+      expect(aheadAlong(direction, game.passengers[0], game.player), `seed ${seed}`).toBeGreaterThan(0)
     }
     expect(tested).toBeGreaterThan(0)
   })
