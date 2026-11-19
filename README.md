@@ -10,7 +10,8 @@
 集滿最後一個時門就打開,從門走出去就破關。站在不是下一個要收的字母那裡按 F,這一下不算數,進度也不會倒退。
 
 **操作**:打開網頁先點一下禮物盒,音樂從這一下開始播;在開始畫面選時限(5 分鐘、10 分鐘、20 分鐘或不限時,預設不限時),
-再按「開始」鎖定游標,進入迷宮。有時限的一局在通關字串下方倒數,倒數歸零時還沒走出門就是挑戰失敗。
+再按「開始」鎖定游標,進入迷宮。有時限的一局在通關字串下方倒數,剩 30 秒起數字變紅閃動、每過一秒響一聲提示聲,
+倒數歸零時還沒走出門就是挑戰失敗。
 破關畫面可以「再玩一次」,失敗畫面可以「再試一次」,兩者都沿用同一個時限;也都可以回到開始畫面重新選時限。
 
 | 按鍵 | 動作 |
@@ -89,10 +90,11 @@ CC BY 3.0 的標註:
 
 ### Sound Effects
 
-三個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
+四個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
 
 | 時機 | 檔案 | 音效包 | 來源 | 授權 |
 |------|------|--------|------|------|
 | 收集成功 | `confirmation_001.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
 | 按錯字母 | `question_004.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
 | 門打開 | `jingles_PIZZI10.ogg` | Music Jingles(Pizzicato jingles) | https://kenney.nl/assets/music-jingles | CC0 |
+| 倒數的最後 30 秒,每過一秒 | `glass_001.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
