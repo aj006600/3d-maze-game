@@ -1,4 +1,4 @@
-// 介面層共用的外觀:蓋住整個畫布的畫面用的半透明底、置中的面板、標題與主要按鈕,
+// 介面層共用的外觀:蓋住整個畫布的畫面用的半透明底、置中的面板、標題、主要與次要按鈕,
 // 以及疊在畫面上的小提示用的白色圓角底。大家共用同一份,畫面之間切換時樣子才會一致。
 
 export const backdrop = {
@@ -41,6 +41,28 @@ export const primaryButton = {
   letterSpacing: 4,
   cursor: 'pointer',
   boxShadow: '0 4px 0 #b83d61',
+}
+
+/** 次要按鈕,例如「回到開始畫面」。它只有框線、字也比主要按鈕小,和主要按鈕放在一起時才不容易被誤按。 */
+export const secondaryButton = {
+  padding: '8px 28px',
+  border: '2px solid #e3d6c8',
+  borderRadius: 999,
+  background: 'transparent',
+  color: '#8a766b',
+  fontFamily: 'inherit',
+  fontSize: 16,
+  fontWeight: 600,
+  letterSpacing: 2,
+  cursor: 'pointer',
+}
+
+/** 面板底部的按鈕區:主要按鈕在上、次要按鈕在下,置中排成一欄。 */
+export const actions = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 16,
 }
 
 /** 疊在畫面上的小提示共用的白色圓角底,例如通關字串、「按 F」與喇叭圖示。 */

@@ -1,7 +1,7 @@
-// 破關畫面:主角走出門之後看到的慶祝畫面,有落下的彩帶、HAPPY BIRTHDAY、祝福文字與「再玩一次」按鈕。
-// 它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上,也就不會意外鎖定游標。
+// 破關畫面:主角走出門之後看到的慶祝畫面,有落下的彩帶、HAPPY BIRTHDAY、祝福文字,
+// 以及「再玩一次」與「回到開始畫面」兩顆按鈕。它蓋住整個畫布,停在這個畫面時點擊不會落到畫布上。
 import { BLESSING, PHRASE } from '../config.js'
-import { backdrop, panel, primaryButton, title } from './screenStyles.js'
+import { actions, backdrop, panel, primaryButton, secondaryButton, title } from './screenStyles.js'
 
 const CONFETTI_COLORS = ['#ff5fa2', '#ffc93c', '#5ec8f2', '#7ed957', '#b28dff', '#ff8a5c']
 const CONFETTI_COUNT = 60
@@ -31,11 +31,11 @@ const CONFETTI = Array.from({ length: CONFETTI_COUNT }, (_, i) => ({
 }))
 
 /**
- * 玩家按下「再玩一次」時,這個畫面會呼叫 `onRestart`。
+ * 玩家按下「再玩一次」時呼叫 `onRestart`,按下「回到開始畫面」時呼叫 `onBackToStart`。
  *
- * 這個畫面在按鈕的 click 事件裡同步呼叫 `onRestart`,所以 `onRestart` 可以直接鎖定游標。
+ * 這個畫面在按鈕的 click 事件裡同步呼叫這兩個 callback,所以 `onRestart` 可以直接鎖定游標。
  */
-export default function FinishScreen({ onRestart }) {
+export default function FinishScreen({ onRestart, onBackToStart }) {
   return (
     <div style={styles.backdrop}>
       <style>{KEYFRAMES}</style>
@@ -58,9 +58,14 @@ export default function FinishScreen({ onRestart }) {
       <section style={styles.panel}>
         <h1 style={styles.title}>{PHRASE}</h1>
         <p style={styles.blessing}>{BLESSING}</p>
-        <button type="button" style={styles.restartButton} onClick={onRestart}>
-          再玩一次
-        </button>
+        <div style={styles.actions}>
+          <button type="button" style={styles.restartButton} onClick={onRestart}>
+            再玩一次
+          </button>
+          <button type="button" style={styles.backButton} onClick={onBackToStart}>
+            回到開始畫面
+          </button>
+        </div>
       </section>
     </div>
   )
@@ -91,5 +96,7 @@ const styles = {
     fontSize: 18,
     lineHeight: 1.7,
   },
+  actions,
   restartButton: primaryButton,
+  backButton: secondaryButton,
 }

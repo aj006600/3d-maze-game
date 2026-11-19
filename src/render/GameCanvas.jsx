@@ -15,25 +15,33 @@ import { createPlayerFigure } from './playerFigure.js'
 const MAX_FRAME_SECONDS = 0.1
 
 /**
- * 填滿父元素的遊戲畫布。點擊畫布鎖定游標,之後用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動。
+ * 填滿父元素的遊戲畫布。游標鎖在畫布上時,用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動。
  * 收集成功時,被收集的字母、主角與狗會在畫布上播收集的回饋。
  *
- * `active` 為 false 時畫面照常繪製,但遊戲不會推進,主角停在原地、朝向不變,按 F 也沒有效果。
+ * 遊戲只在 `active` 為 true、而且游標鎖在畫布上時推進。其餘時候畫面照常繪製,但主角停在原地、朝向不變,
+ * 按 F 也沒有效果;這段時間按下的 F 會被丟掉,遊戲再推進時不會補算。
+ * 游標被放開之前按下、還沒處理到的 F 也一樣丟掉。
  * `active` 變成 false 時,被畫布鎖住的游標會被放開,玩家才點得到疊在畫布上的按鈕。
  *
- * 介面層透過兩個 callback 得知遊戲的狀態:
+ * 介面層透過三個 callback 得知遊戲與游標的狀態:
  * - `onStatusChange({ canInteract, progress, doorOpen, atDoor, finished })`:其中任何一項有變時呼叫,
  *   每一局的第一幀也會呼叫一次。各項的意思與遊戲核心的同名屬性相同。
  * - `onInteract(result)`:每按一次 F,遊戲核心處理完之後呼叫。result 是遊戲核心 `interact()` 的回傳值。
+ * - `onPointerLockChange(locked)`:游標的鎖定狀態可能變了時呼叫,locked 是游標當下是不是鎖在畫布上。
+ *   鎖定成功、游標被放開(按 Esc、切到別的視窗或分頁)與瀏覽器拒絕鎖定時都會呼叫。
  *
- * 父元件透過 ref 可以拿到 `{ lockPointer() }`,用它把游標鎖在畫布上。
+ * 父元件透過 ref 可以拿到 `{ lockPointer() }`,用它把游標鎖在畫布上。點擊畫布本身不會鎖定游標。
  * 父元件必須在使用者的點擊或按鍵事件裡同步呼叫 `lockPointer()`,否則瀏覽器會拒絕鎖定。
+ * 鎖定的結果要等 `onPointerLockChange` 才知道。
  *
  * 換一局遊戲(`game` 換成另一個物件)時,場景會釋放後重建,鏡頭的朝向與俯仰角回到起始值。
  * 畫布本身沿用同一個,所以在換局的那次點擊裡呼叫 `lockPointer()`,游標會一直鎖在新的一局上。
  * 卸載時釋放 renderer、geometry 與 material,畫布也會從頁面上移除。
  */
-const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange, onInteract }, ref) {
+const GameCanvas = forwardRef(function GameCanvas(
+  { game, active, onStatusChange, onInteract, onPointerLockChange },
+  ref,
+) {
   const containerRef = useRef(null)
   const rendererRef = useRef(null)
   const controlsRef = useRef(null)
@@ -41,7 +49,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
   const cameraRef = useRef(null)
   // 動畫迴圈只在 game 換掉時重建,所以迴圈裡要透過 ref 讀到最新的 active 與 callback
   const activeRef = useRef(active)
-  const callbacksRef = useRef({ onStatusChange, onInteract })
+  const callbacksRef = useRef({ onStatusChange, onInteract, onPointerLockChange })
 
   useEffect(() => {
     activeRef.current = active
@@ -49,8 +57,8 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
   }, [active])
 
   useEffect(() => {
-    callbacksRef.current = { onStatusChange, onInteract }
-  }, [onStatusChange, onInteract])
+    callbacksRef.current = { onStatusChange, onInteract, onPointerLockChange }
+  }, [onStatusChange, onInteract, onPointerLockChange])
 
   useImperativeHandle(ref, () => ({
     lockPointer() {
@@ -67,7 +75,9 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
     // 畫布預設是 inline,底下會多出行高的空隙,讓頁面出現捲軸
     renderer.domElement.style.display = 'block'
     container.appendChild(renderer.domElement)
-    const controls = createControls(renderer.domElement)
+    const controls = createControls(renderer.domElement, {
+      onLockChange: (locked) => callbacksRef.current.onPointerLockChange?.(locked),
+    })
     rendererRef.current = renderer
     controlsRef.current = controls
 
@@ -118,7 +128,7 @@ const GameCanvas = forwardRef(function GameCanvas({ game, active, onStatusChange
 
       const before = game.player
       const { pitch, interactions, ...input } = controls.read()
-      if (activeRef.current) {
+      if (activeRef.current && controls.isLocked()) {
         game.step({ ...input, dt })
         // 互動在移動之後處理,判斷的是主角這一幀跑完之後所在的格子
         for (let i = 0; i < interactions; i += 1) {

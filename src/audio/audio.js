@@ -1,6 +1,6 @@
 // 遊戲的聲音。這個模組負責下列幾件事:
 // - 載入音檔。
-// - 依目前的畫面播放對應的音樂,換畫面時切換曲子。
+// - 依目前的畫面播放對應的音樂,換畫面時切換曲子;相鄰兩個畫面用同一首曲子時,曲子接著播。
 // - 遊戲中的事件發生時播音效。
 // - 靜音。
 // 呼叫端只需要告訴它目前在哪個畫面、發生了哪個事件、有沒有靜音,怎麼播由這裡決定。遊戲核心不知道它的存在。
@@ -8,25 +8,37 @@
 // 播放用 Web Audio API 而不用 <audio>:<audio loop> 每次繞回開頭都有一小段空隙,
 // AudioBufferSourceNode 的 loop 則是逐個 sample 接回開頭,循環時才聽不出接縫。
 // 也因為這樣,要無縫循環的曲子必須是 OGG:MP3 編碼會在頭尾補上空白,解碼出來的頭尾就不是原本的接縫。
-import finishedMusicUrl from './music/happy-birthday-music-box.mp3'
-import playingMusicUrl from './music/flowerbed-fields-loop.ogg'
-import startMusicUrl from './music/pleasant-creek-loop.ogg'
+import flowerbedFieldsUrl from './music/flowerbed-fields-loop.ogg'
+import happyBirthdayUrl from './music/happy-birthday-music-box.mp3'
+import pleasantCreekUrl from './music/pleasant-creek-loop.ogg'
 import collectedSoundUrl from './sounds/confirmation_001.ogg'
 import doorOpenedSoundUrl from './sounds/jingles_PIZZI10.ogg'
 import wrongSoundUrl from './sounds/question_004.ogg'
 
 /**
- * 各畫面的音樂,每一首都會一直重播到換畫面為止。沒列在這裡的畫面不播音樂。
+ * 音樂的曲子,每一首都會一直重播到換成別首為止。
  *
  * - `volume` 拉齊各曲原檔的響度差異。
  * - `gapSeconds` 是每播完一遍之後停多久再重播。0 表示無縫循環。
- * - `fadeOutSeconds` 是換畫面時這首淡出多久,淡出完才開始播下一首。
+ * - `fadeOutSeconds` 是換成別首時這首淡出多久,淡出完才開始播下一首。
  */
 const MUSIC = {
-  start: { url: startMusicUrl, volume: 0.38, gapSeconds: 0, fadeOutSeconds: 1 },
-  playing: { url: playingMusicUrl, volume: 0.7, gapSeconds: 0, fadeOutSeconds: 0 },
+  pleasantCreek: { url: pleasantCreekUrl, volume: 0.38, gapSeconds: 0, fadeOutSeconds: 1 },
+  flowerbedFields: { url: flowerbedFieldsUrl, volume: 0.7, gapSeconds: 0, fadeOutSeconds: 0 },
   // 原檔的結尾已經有約 2 秒的無聲,再補 1 秒,兩遍之間聽起來大約停 3 秒
-  finished: { url: finishedMusicUrl, volume: 0.35, gapSeconds: 1, fadeOutSeconds: 0 },
+  happyBirthday: { url: happyBirthdayUrl, volume: 0.35, gapSeconds: 1, fadeOutSeconds: 0 },
+}
+
+/**
+ * 各畫面播哪一首曲子。沒列在這裡的畫面不播音樂。
+ *
+ * 換畫面時曲子不變,就接著播,不淡出也不從頭播。暫停畫面因此沿用遊戲中的曲子,短暫的停頓不會打斷氣氛。
+ */
+const MUSIC_OF_SCREEN = {
+  start: 'pleasantCreek',
+  playing: 'flowerbedFields',
+  paused: 'flowerbedFields',
+  finished: 'happyBirthday',
 }
 
 /**
@@ -52,9 +64,10 @@ const DECLICK_SECONDS = 0.03
  * 建立遊戲的聲音。建立時就開始下載音檔,但在呼叫 `unlock()` 之前不會發出任何聲音。
  *
  * - `unlock()` 必須在使用者的點擊或按鍵事件裡呼叫,否則瀏覽器會讓它一直保持無聲。呼叫第二次沒有效果。
- * - `setScreen(screen)` 告訴它目前在哪個畫面:`'entry'`、`'start'`、`'playing'` 或 `'finished'`。
- *   畫面有變時,上一首停下或淡出,接著播這個畫面的音樂;同一個畫面重複呼叫不會讓音樂從頭播。
- *   `unlock()` 之前也可以呼叫,解鎖時就從當下的畫面開始播。
+ * - `setScreen(screen)` 告訴它目前在哪個畫面:`'entry'`、`'start'`、`'playing'`、`'paused'` 或 `'finished'`。
+ *   新畫面的曲子與上一個畫面不同時,上一首停下或淡出,接著播新畫面的曲子。
+ *   曲子相同時接著播,所以同一個畫面重複呼叫,或在共用同一首的畫面之間切換,都不會讓音樂從頭播。
+ *   `unlock()` 之前也可以呼叫,解鎖時就從當下畫面的曲子開始播。
  * - `playSound(event)` 播一次這個事件的音效:`'collected'`、`'wrong'` 或 `'doorOpened'`。
  *   前兩個與遊戲核心 `interact()` 的回傳值同名。`unlock()` 之前呼叫不會出聲,之後也不會補播。
  * - `setMuted(muted)` 切換靜音,音樂與音效一起安靜。靜音時音樂照樣往下播,只是聽不到。
@@ -70,10 +83,11 @@ export function createAudio() {
   let context = null
   let master = null
   let muted = false
-  let screen = null
+  // 目前畫面的曲子名稱,不播音樂的畫面是 null
+  let track = null
   // 正在播的那一首:{ gain, source, fadeOutSeconds }。開始淡出之後就不算正在播
   let current = null
-  // 它在每次換畫面時加一。曲子解碼需要時間,解碼完時用它確認畫面沒有在這段時間裡又換掉
+  // 它在每次換曲子時加一。曲子解碼需要時間,解碼完時用它確認曲子沒有在這段時間裡又換掉
   let generation = 0
 
   function musicBufferOf(name) {
@@ -138,15 +152,16 @@ export function createAudio() {
       master = context.createGain()
       master.gain.value = muted ? 0 : 1
       master.connect(context.destination)
-      if (screen in MUSIC) playMusic(screen, context.currentTime)
+      if (track !== null) playMusic(track, context.currentTime)
     },
-    setScreen(next) {
-      if (next === screen) return
-      screen = next
+    setScreen(screen) {
+      const next = MUSIC_OF_SCREEN[screen] ?? null
+      if (next === track) return
+      track = next
       generation += 1
       if (context === null) return
       const silentAt = fadeOutCurrent()
-      if (next in MUSIC) playMusic(next, silentAt)
+      if (next !== null) playMusic(next, silentAt)
     },
     async playSound(event) {
       if (context === null) return

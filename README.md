@@ -9,14 +9,14 @@
 **目標**:迷宮的死路裡放著 A 到 Z 的字母。照 HAPPY BIRTHDAY 的順序收集字母(空格不算,共 13 個),
 集滿最後一個時門就打開,從門走出去就破關。站在不是下一個要收的字母那裡按 F,這一下不算數,進度也不會倒退。
 
-**操作**:打開網頁先點一下禮物盒,音樂從這一下開始播;再按開始畫面的「開始」鎖定游標,進入迷宮。
+**操作**:打開網頁先點一下禮物盒,音樂從這一下開始播;再按開始畫面的「開始」鎖定游標,進入迷宮。破關畫面可以「再玩一次」,也可以回到開始畫面。
 
 | 按鍵 | 動作 |
 |------|------|
 | `W` `A` `S` `D` | W 前進、S 倒退、A 與 D 橫移 |
 | 滑鼠 | 左右移動轉向,上下移動調整俯仰角 |
 | `F` | 站進有字母的死路時收集字母 |
-| `Esc` | 放開游標,點一下畫面就能繼續 |
+| `Esc` | 暫停;在暫停畫面按「繼續」接著玩,或回到開始畫面 |
 | `M` | 切換靜音,畫面右上角的喇叭圖示顯示目前的狀態 |
 
 ## Quick Start
@@ -48,7 +48,7 @@ make help    # 其餘指令
 │   ├── config.js           # 試玩後要調整的設定:seed、通關字串、祝福文字、場景比例(牆高、走道寬度)、收集回饋的長度、鏡頭距離與俯仰角
 │   ├── game/               # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
 │   ├── render/             # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,另外負責鏡頭、鍵鼠輸入與跟著主角跑的狗,不持有規則
-│   └── ui/                 # 介面層:疊在畫布上的入口畫面、開始畫面、遊戲中的提示、破關畫面與喇叭圖示(React),不持有規則
+│   └── ui/                 # 介面層:疊在畫布上的入口畫面、開始畫面、遊戲中的提示、暫停畫面、破關畫面與喇叭圖示(React),不持有規則
 ├── tests/                  # Vitest,鏡射 src/ 的結構
 ├── index.html · vite.config.js · package.json · package-lock.json
 ├── eslint.config.js        # ESLint:recommended 加 react-hooks
@@ -71,7 +71,7 @@ make help    # 其餘指令
 | 畫面 | 曲名 | 作者 | 來源 | 授權 |
 |------|------|------|------|------|
 | 開始畫面 | Pleasant Creek(循環版) | Matthew Pablo | https://opengameart.org/content/pleasant-creek | CC BY 3.0 |
-| 遊戲中 | Flowerbed Fields [Loop] | Zane Little Music | https://opengameart.org/content/flowerbed-fields-loop | CC0 |
+| 遊戲中、暫停畫面 | Flowerbed Fields [Loop] | Zane Little Music | https://opengameart.org/content/flowerbed-fields-loop | CC0 |
 | 破關畫面 | Happy Birthday Music Box | Percy Duke | https://freesound.org/people/Percy%20Duke/sounds/23270/ | CC BY 3.0 |
 
 CC BY 3.0 的標註:

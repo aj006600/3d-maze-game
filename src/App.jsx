@@ -1,5 +1,8 @@
 // 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、有沒有靜音,
 // 並把這兩件事與遊戲中的事件(收集、按錯、門打開)告訴音訊,由它播對應的音樂與音效。
+//
+// 暫停只有一條規則:畫面停在遊戲中,而且游標鎖在畫布上,遊戲才推進。游標一放開就是暫停,
+// 不論是按 Esc、切到別的視窗還是切到別的分頁,瀏覽器都會放開游標,所以三者走同一條路。
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createAudio } from './audio/audio.js'
@@ -9,6 +12,7 @@ import GameCanvas from './render/GameCanvas.jsx'
 import EntryScreen from './ui/EntryScreen.jsx'
 import FinishScreen from './ui/FinishScreen.jsx'
 import Hud from './ui/Hud.jsx'
+import PauseScreen from './ui/PauseScreen.jsx'
 import SpeakerIcon from './ui/SpeakerIcon.jsx'
 import StartScreen from './ui/StartScreen.jsx'
 
@@ -35,6 +39,16 @@ export default function App() {
   const handleStatusChange = useCallback((next) => {
     setStatus(next)
     if (next.finished) setScreen('finished')
+  }, [])
+
+  // 只在一局進行中的兩個畫面之間切換:遊戲中游標被放開就暫停,暫停時鎖定成功就回到遊戲中。
+  // 鎖定被瀏覽器拒絕時也會收到 false,剛按「開始」或「再玩一次」的新一局因此停在暫停畫面
+  const handlePointerLockChange = useCallback((locked) => {
+    setScreen((current) => {
+      if (locked && current === 'paused') return 'playing'
+      if (!locked && current === 'playing') return 'paused'
+      return current
+    })
   }, [])
 
   const handleInteract = useCallback(
@@ -87,6 +101,8 @@ export default function App() {
     setScreen('start')
   }
 
+  // 「開始」與「再玩一次」先切到遊戲中,不等鎖定的結果:鎖定成功時畫面才不會先閃過暫停畫面。
+  // 鎖定的結果出來之前,畫布不會推進遊戲
   function start() {
     // 瀏覽器只在使用者事件裡允許鎖定游標,所以要在按鈕的 click 裡直接鎖,不能等畫面切換之後才鎖
     canvasRef.current.lockPointer()
@@ -95,12 +111,30 @@ export default function App() {
 
   function restart() {
     canvasRef.current.lockPointer()
+    replaceGame()
+    setScreen('playing')
+  }
+
+  // 畫面留在暫停畫面,等鎖定成功才回到遊戲中。按完 Esc 立刻按「繼續」時瀏覽器會拒絕鎖定,玩家再按一次就好
+  function resume() {
+    canvasRef.current.lockPointer()
+  }
+
+  // 這一局直接丟掉,開始畫面後面的畫布顯示新的一局:主角站在起點
+  function backToStart() {
+    replaceGame()
+    setScreen('start')
+  }
+
+  function replaceGame() {
     setGame(newGame())
     // 上一局的狀態要一起清掉:提示不能顯示上一局的進度,「不是這個」與「門開了」也不能在提示重新出現時再播一次
     setStatus(null)
     setWrongCount(0)
-    setScreen('playing')
   }
+
+  // 暫停時提示照樣掛著,只是被暫停畫面蓋住。卸載再掛回去的話,提示的動畫會在繼續時重播一次
+  const inRound = screen === 'playing' || screen === 'paused'
 
   return (
     <main style={styles.main}>
@@ -110,8 +144,9 @@ export default function App() {
         active={screen === 'playing'}
         onStatusChange={handleStatusChange}
         onInteract={handleInteract}
+        onPointerLockChange={handlePointerLockChange}
       />
-      {screen === 'playing' && status !== null && (
+      {inRound && status !== null && (
         <Hud
           phrase={PHRASE}
           progress={status.progress}
@@ -123,7 +158,8 @@ export default function App() {
       )}
       {screen === 'entry' && <EntryScreen onOpen={open} />}
       {screen === 'start' && <StartScreen onStart={start} />}
-      {screen === 'finished' && <FinishScreen onRestart={restart} />}
+      {screen === 'paused' && <PauseScreen onResume={resume} onBackToStart={backToStart} />}
+      {screen === 'finished' && <FinishScreen onRestart={restart} onBackToStart={backToStart} />}
       {giftOpened && <SpeakerIcon muted={muted} />}
     </main>
   )

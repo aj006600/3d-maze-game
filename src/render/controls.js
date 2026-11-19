@@ -11,21 +11,30 @@ const MOVE_KEY_CODES = new Set(Object.values(KEYS))
 const INTERACT_KEY = 'KeyF'
 
 /**
- * 開始監聽輸入。點擊 element 會鎖定游標,按 Esc 由瀏覽器放開,再點一下可以重新鎖定。
+ * 開始監聽輸入。游標只透過 `lock()` 鎖定,點擊 element 不會鎖定。
  *
  * `read()` 回傳當下的 `{ forward, right, heading, pitch, interactions }`。
  * - heading 從 `reset()` 給的朝向開始累加,不限角度;還沒呼叫過 `reset()` 時從 0 開始。
  * - pitch 從設定的起始俯仰角開始,滑鼠往下移是往下看,限制在設定的上下限之間。
  * - interactions 是上一次 `read()` 之後按下互動鍵的次數。每一下只會被回報一次,按住不放也只算一下。
+ *   游標的鎖定狀態一變,還沒回報的次數就歸零。
  *
  * 游標沒鎖定時滑鼠不會轉向,但 WASD 與互動鍵照樣有效。
  * `lock()` 把游標鎖在 element 上。它必須在使用者的點擊或按鍵事件裡呼叫,否則瀏覽器會拒絕鎖定。
- * 瀏覽器拒絕鎖定時,`lock()` 不會丟出錯誤,玩家之後點一下 element 一樣能鎖定。
+ * 瀏覽器拒絕鎖定時,`lock()` 不會丟出錯誤,之後在另一次點擊裡再呼叫一次就好。
  * `unlock()` 放開被它鎖住的游標,游標沒被它鎖住時什麼都不做。
+ * `isLocked()` 回傳游標當下是不是鎖在 element 上。
  * `reset(startHeading)` 在新的一局開始時呼叫:朝向換成 startHeading,俯仰角回到起始值,還沒回報的互動鍵也一併清掉。
  * 用完必須呼叫 `dispose()` 移除所有監聽,游標若被它鎖住也會一併放開。
+ *
+ * `onLockChange(locked)` 在游標的鎖定狀態可能變了時呼叫,locked 是呼叫當下 `isLocked()` 的值:
+ * - 鎖定成功時呼叫。
+ * - 游標被放開時呼叫,不論是 `unlock()`、按 Esc,還是切到別的視窗或分頁。
+ * - 瀏覽器拒絕鎖定時也會呼叫。這時狀態沒有變,locked 通常是 false。
+ *
+ * 鎖定與放開都由瀏覽器非同步完成,所以 `onLockChange` 一定在 `lock()` 與 `unlock()` 回傳之後才被呼叫。
  */
-export function createControls(element) {
+export function createControls(element, { onLockChange } = {}) {
   const pressed = new Set()
   let heading = 0
   let pitch = CAMERA.startPitch
@@ -47,12 +56,19 @@ export function createControls(element) {
   }
   function lock() {
     if (isLocked()) return
-    // 有些瀏覽器回傳 Promise、有些不回傳。按 Esc 放開後立刻再點時瀏覽器會拒絕鎖定,
-    // 這時玩家再點一次就好;接住 rejection,console 才不會出現 uncaught 錯誤
+    // 有些瀏覽器回傳 Promise、有些不回傳,所以鎖定的結果改從 pointerlockchange 與 pointerlockerror 得知。
+    // 按 Esc 放開後立刻再鎖時瀏覽器會拒絕;接住 rejection,console 才不會出現 uncaught 錯誤
     Promise.resolve(element.requestPointerLock()).catch(() => {})
   }
   function unlock() {
     if (isLocked()) document.exitPointerLock()
+  }
+  // 拒絕鎖定的 pointerlockerror 也走這裡:呼叫端在等鎖定的結果,拒絕時一樣要通知
+  function onPointerLockChange() {
+    // 畫面在背景時瀏覽器會停掉動畫迴圈,按下的互動鍵可能一直沒被讀走。
+    // 鎖定狀態一變就清掉,暫停前或暫停時按的 F 才不會在繼續之後才生效
+    interactions = 0
+    onLockChange?.(isLocked())
   }
   function onMouseMove(event) {
     if (!isLocked()) return
@@ -65,7 +81,8 @@ export function createControls(element) {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onBlur)
-  element.addEventListener('click', lock)
+  document.addEventListener('pointerlockchange', onPointerLockChange)
+  document.addEventListener('pointerlockerror', onPointerLockChange)
   document.addEventListener('mousemove', onMouseMove)
 
   const axis = (positive, negative) => (pressed.has(positive) ? 1 : 0) - (pressed.has(negative) ? 1 : 0)
@@ -84,6 +101,7 @@ export function createControls(element) {
     },
     lock,
     unlock,
+    isLocked,
     reset(startHeading) {
       heading = startHeading
       pitch = CAMERA.startPitch
@@ -93,7 +111,8 @@ export function createControls(element) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
-      element.removeEventListener('click', lock)
+      document.removeEventListener('pointerlockchange', onPointerLockChange)
+      document.removeEventListener('pointerlockerror', onPointerLockChange)
       document.removeEventListener('mousemove', onMouseMove)
       unlock()
     },

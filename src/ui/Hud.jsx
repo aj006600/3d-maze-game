@@ -1,6 +1,6 @@
-// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」,
+// 遊戲中疊在畫布上的提示:上方的通關字串與收集進度、門打開時的「門開了」、左上角的「Esc 暫停」,
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
-// 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
+// 它只負責顯示,不接收滑鼠事件。
 import { COLLECT_FEEDBACK_SECONDS } from '../config.js'
 import Key from './Key.jsx'
 import { pill } from './screenStyles.js'
@@ -68,6 +68,9 @@ export default function Hud({ phrase, progress, canInteract, wrongCount, atDoor,
         ))}
       </div>
       {doorOpen && <div style={styles.doorOpened}>門開了</div>}
+      <div style={styles.pauseHint}>
+        <Key>Esc</Key>暫停
+      </div>
       <div style={styles.prompts}>
         {/* 換 key 會換一個新的元素,動畫才會從頭播,連續按錯時每一下都看得到 */}
         {wrongCount > 0 && (
@@ -118,6 +121,22 @@ const styles = {
   word: {
     display: 'flex',
     gap: 6,
+  },
+  // 與右上角的喇叭圖示對稱,用同樣的高度與白色圓角底。
+  // 通關字串在上方正中央,視窗寬度在 700 px 以上時兩者不會疊在一起
+  pauseHint: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 44,
+    boxSizing: 'border-box',
+    padding: '0 14px',
+    ...pill,
+    fontSize: 14,
+    fontWeight: 600,
   },
   letter: {
     display: 'inline-block',
