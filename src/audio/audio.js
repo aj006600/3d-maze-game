@@ -1,5 +1,5 @@
 // 遊戲的聲音:載入音檔,依目前的畫面播放對應的音樂,換畫面時切換曲子,並負責靜音。
-// 介面層只告訴它目前在哪個畫面、玩家有沒有切換靜音;遊戲核心不知道它的存在。
+// 呼叫端只需要告訴它目前在哪個畫面、有沒有靜音,怎麼播由這裡決定。遊戲核心不知道它的存在。
 //
 // 播放用 Web Audio API 而不用 <audio>:<audio loop> 每次繞回開頭都有一小段空隙,
 // AudioBufferSourceNode 的 loop 則是逐個 sample 接回開頭,循環時才聽不出接縫。
@@ -11,7 +11,7 @@ import startMusicUrl from './music/pleasant-creek-loop.ogg'
 /**
  * 各畫面的音樂,每一首都會一直重播到換畫面為止。沒列在這裡的畫面不播音樂。
  *
- * - `volume` 拉齊各曲原檔的響度差異,也讓音樂比之後的音效小聲。
+ * - `volume` 拉齊各曲原檔的響度差異。
  * - `gapSeconds` 是每播完一遍之後停多久再重播。0 表示無縫循環。
  * - `fadeOutSeconds` 是換畫面時這首淡出多久,淡出完才開始播下一首。
  */
@@ -37,7 +37,7 @@ const DECLICK_SECONDS = 0.03
  * 音檔下載或解碼失敗時,那一首不播並在 console 留下錯誤,遊戲本身不受影響。
  */
 export function createAudio() {
-  // 下載不需要使用者互動,建立時就開始,點下禮物盒的時候檔案多半已經在手上
+  // 下載不需要使用者互動,所以建立時就開始。等到第一次要播的時候,檔案多半已經下載好
   const downloads = Object.fromEntries(Object.entries(MUSIC).map(([screen, { url }]) => [screen, download(url)]))
   const buffers = {}
   let context = null
@@ -46,7 +46,7 @@ export function createAudio() {
   let screen = null
   // 正在播的那一首:{ gain, source, fadeOutSeconds }。開始淡出之後就不算正在播
   let current = null
-  // 每換一次畫面加一。曲子解碼需要時間,解碼完時用它確認畫面沒有在這段時間裡又換掉
+  // 它在每次換畫面時加一。曲子解碼需要時間,解碼完時用它確認畫面沒有在這段時間裡又換掉
   let generation = 0
 
   function bufferOf(name) {
@@ -56,7 +56,8 @@ export function createAudio() {
     return buffers[name]
   }
 
-  async function play(name, notBefore, ticket) {
+  async function play(name, notBefore) {
+    const requested = generation
     let buffer
     try {
       buffer = await bufferOf(name)
@@ -64,7 +65,7 @@ export function createAudio() {
       console.error(`音樂載入失敗:${MUSIC[name].url}`, error)
       return
     }
-    if (ticket !== generation) return
+    if (requested !== generation) return
 
     const gain = context.createGain()
     gain.gain.value = MUSIC[name].volume
@@ -99,7 +100,7 @@ export function createAudio() {
       master = context.createGain()
       master.gain.value = muted ? 0 : 1
       master.connect(context.destination)
-      if (screen in MUSIC) play(screen, context.currentTime, generation)
+      if (screen in MUSIC) play(screen, context.currentTime)
     },
     setScreen(next) {
       if (next === screen) return
@@ -107,11 +108,11 @@ export function createAudio() {
       generation += 1
       if (context === null) return
       const silentAt = fadeOutCurrent()
-      if (next in MUSIC) play(next, silentAt, generation)
+      if (next in MUSIC) play(next, silentAt)
     },
     setMuted(value) {
       muted = value
-      if (master === null) return
+      if (context === null) return
       // setTargetAtTime 以指數逼近目標,大約三個時間常數之後就聽不出差別
       master.gain.setTargetAtTime(value ? 0 : 1, context.currentTime, DECLICK_SECONDS / 3)
     },

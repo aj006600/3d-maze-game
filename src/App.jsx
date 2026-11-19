@@ -1,4 +1,5 @@
-// 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面。
+// 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、有沒有靜音,
+// 並把這兩件事告訴音訊,由它播對應的音樂。
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createAudio } from './audio/audio.js'
@@ -48,16 +49,17 @@ export default function App() {
     audio.setMuted(muted)
   }, [audio, muted])
 
-  // 入口畫面還沒有聲音,M 從開始畫面起才有效。監聽 window,游標被畫布鎖住時也收得到
-  const opened = screen !== 'entry'
+  // 入口畫面還沒有聲音,M 從開始畫面起才有效。
+  // 這裡監聽的是 window:游標被畫布鎖住時,按鍵事件仍然會送到 window
+  const giftOpened = screen !== 'entry'
   useEffect(() => {
-    if (!opened) return undefined
+    if (!giftOpened) return undefined
     function onKeyDown(event) {
       if (event.code === MUTE_KEY && !event.repeat) setMuted((value) => !value)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [opened])
+  }, [giftOpened])
 
   useEffect(() => {
     if (!allowTeleport) return undefined
@@ -110,7 +112,7 @@ export default function App() {
       {screen === 'entry' && <EntryScreen onOpen={open} />}
       {screen === 'start' && <StartScreen onStart={start} />}
       {screen === 'finished' && <FinishScreen onRestart={restart} />}
-      {opened && <SpeakerIcon muted={muted} />}
+      {giftOpened && <SpeakerIcon muted={muted} />}
     </main>
   )
 }

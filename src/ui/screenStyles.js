@@ -1,5 +1,5 @@
-// 蓋住整個畫布的畫面共用的外觀:半透明底、置中的面板、標題與主要按鈕。
-// 這些畫面共用同一份,畫面之間切換時,面板的大小與按鈕的樣子才會一致。
+// 介面層共用的外觀:蓋住整個畫布的畫面用的半透明底、置中的面板、標題與主要按鈕,
+// 以及疊在畫面上的小提示用的白色圓角底。大家共用同一份,畫面之間切換時樣子才會一致。
 
 export const backdrop = {
   position: 'absolute',
@@ -41,4 +41,11 @@ export const primaryButton = {
   letterSpacing: 4,
   cursor: 'pointer',
   boxShadow: '0 4px 0 #b83d61',
+}
+
+/** 疊在畫面上的小提示共用的白色圓角底,例如通關字串、「按 F」與喇叭圖示。 */
+export const pill = {
+  borderRadius: 999,
+  background: 'rgba(255, 253, 248, 0.92)',
+  boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
 }

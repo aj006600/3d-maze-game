@@ -79,4 +79,4 @@ CC BY 3.0 的標註:
 
 - Pleasant Creek:循環版的原檔是 WAV,轉成 OGG 才能無縫循環。
 - Flowerbed Fields [Loop]:原檔的 OGG。
-- Happy Birthday Music Box:Freesound 頁面上不必登入就能下載的 HQ 預覽檔。原檔本身就是 128 kbps 的 MP3,預覽檔與它的音質相當。
+- Happy Birthday Music Box:Freesound 頁面上不必登入就能下載的 HQ 預覽檔,是 Freesound 由原檔(128 kbps 的 MP3)轉出的 MP3。

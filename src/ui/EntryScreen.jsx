@@ -1,7 +1,7 @@
 // 入口畫面:打開網頁時第一眼看到的禮物盒與「點一下打開」的提示,點一下就進到開始畫面。
 // 它存在的理由是瀏覽器的限制:使用者與網頁互動之前,網頁不能出聲。玩家拆禮物的這一下,同時讓音樂開始播。
 // 整個畫面是一顆按鈕,點在禮物盒以外的地方也算數。
-import { backdrop } from './screenStyles.js'
+import { backdrop, pill } from './screenStyles.js'
 
 // inline style 寫不了 @keyframes,動畫另外放在這段 CSS 裡
 const KEYFRAMES = `
@@ -69,9 +69,7 @@ const styles = {
   },
   hint: {
     padding: '10px 28px',
-    borderRadius: 999,
-    background: '#fffdf8',
-    boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
+    ...pill,
     fontSize: 22,
     fontWeight: 700,
     letterSpacing: 4,

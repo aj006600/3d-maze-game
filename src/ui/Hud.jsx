@@ -2,6 +2,7 @@
 // 下方可互動時的「按 F」、按錯時的「不是這個」,以及走到鎖著的門前時的「先收集完字母」。
 // 它不接收滑鼠事件,點擊會穿過它落到畫布上;玩家放開游標之後,才能點畫布重新鎖定。
 import Key from './Key.jsx'
+import { pill } from './screenStyles.js'
 
 // inline style 寫不了 @keyframes,動畫另外放在這段 CSS 裡
 const KEYFRAMES = `
@@ -84,13 +85,6 @@ function letterStyleOf(index, progress) {
   return styles.letter
 }
 
-// 通關字串與下方提示共用的白色圓角底
-const panel = {
-  borderRadius: 999,
-  background: 'rgba(255, 253, 248, 0.92)',
-  boxShadow: '0 6px 20px rgba(120, 80, 40, 0.2)',
-}
-
 const styles = {
   overlay: {
     position: 'absolute',
@@ -105,7 +99,7 @@ const styles = {
     display: 'flex',
     gap: 20,
     padding: '10px 22px',
-    ...panel,
+    ...pill,
     whiteSpace: 'nowrap',
   },
   word: {
@@ -144,7 +138,7 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     padding: '10px 24px',
-    ...panel,
+    ...pill,
     fontSize: 20,
     fontWeight: 600,
   },
