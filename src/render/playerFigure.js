@@ -30,18 +30,20 @@ const TIGER_BLACK = '#1b1410'
 const HIP_HEIGHT = 0.9
 // hem 是褲管下緣離地的高度,褲管與鞋子在這裡交接
 const LEG = { width: 0.155, depth: 0.17, spacing: 0.095, hem: 0.07 }
-// 骨盆下緣與兩條褲管的外緣一樣寬,褲管上方才不會多出一圈像裙襬的邊
-const PELVIS = { bottom: -0.1, top: 0.21, bottomSize: [0.35, 0.18], topSize: [0.31, 0.2] }
+// 骨盆下緣與兩條褲管的外緣一樣大,褲管上方才不會多出一圈像裙襬的邊
+const PELVIS = { bottom: -0.1, top: 0.21, bottomSize: [LEG.spacing * 2 + LEG.width, LEG.depth], topSize: [0.31, 0.2] }
 const WAIST = { y: 0.19, size: [0.3, 0.19] }
 const CHEST = { y: 0.4, size: [0.36, 0.23] }
 const SHOULDER = { y: 0.56, size: [0.37, 0.2] }
 const BELT = { y: 0.21, width: 0.33, height: 0.07, depth: 0.22 }
-const ARM = { width: 0.1, depth: 0.11, sleeve: 0.34, length: 0.52, splay: 0.1 }
-// 頭是一顆橢球,這裡是三個方向的半徑與中心的高度
-const HEAD = { width: 0.165, height: 0.19, depth: 0.175, y: 0.83 }
+// length 是肩關節到手腕的長度。七分袖是整條袖子的七成,所以 sleeve 取 length 的七成。
+// splay 是手臂往外張的角度,它讓垂下的手臂避開腰帶右側的蝴蝶結,縮小它之前要確認袖口不會插進蝴蝶結
+const ARM = { width: 0.1, depth: 0.11, sleeve: 0.36, length: 0.52, splay: 0.14 }
+// 頭是一顆橢球,radii 是 x、y、z 三個方向的半徑,y 是中心的高度
+const HEAD = { radii: [0.165, 0.19, 0.175], y: 0.83 }
 // 髮蓋是一塊球殼,軸心從頭頂往後倒 tilt,從軸心往外蓋到 coverage 的角度。
 // 兩者相減是前緣離頭頂的角度,停在額頭上方,所以沒有瀏海;兩者相加是後緣離頭頂的角度,蓋到後頸。
-// 球殼在左側的分線那裡留一道 partGap 寬的縫,縫裡露出頭皮,就是側分的分線。
+// 球殼在分線那裡留一道 partGap 寬的縫,縫裡露出頭皮,就是側分的分線;partOffset 是分線從正前方往左偏的角度。
 // 縫從離軸心 partStart 的地方開到前緣,頭頂後方不開縫,從背後看才不像一道裂痕
 const HAIR_CAP = { tilt: 0.95, coverage: 1.66, partStart: 0.9, partGap: 0.06, partOffset: 0.45 }
 
@@ -139,8 +141,8 @@ export function createPlayerFigure() {
     part(waistGeometry, materials.shirt, [1, 1, 1], [0, (WAIST.y + CHEST.y) / 2, 0]),
     part(chestGeometry, materials.shirt, [1, 1, 1], [0, (CHEST.y + SHOULDER.y) / 2, 0]),
     part(box, materials.tiger, [BELT.width, BELT.height, BELT.depth], [0, BELT.y, 0]),
-    bowParts(box, materials),
-    // 名牌在左胸,不放文字也不放 logo
+    createBow(box, materials),
+    // 名牌刻意不放文字與 logo
     part(box, materials.nameTag, [0.085, 0.03, 0.012], [-0.09, 0.43, -CHEST.size[1] / 2]),
     part(box, materials.skin, [0.09, 0.2, 0.085], [0, SHOULDER.y + 0.04, 0]),
     ...collarParts(box, collarGeometry, materials),
@@ -212,17 +214,10 @@ function armParts(box, materials) {
 function headParts(ball, hairCapGeometries, materials) {
   // 髮蓋比頭大一圈,貼著頭皮往後梳,邊緣與頭皮之間的那一點落差就是頭髮的厚度
   const thickness = 0.015
-  const caps = hairCapGeometries.map((geometry) =>
-    part(
-      geometry,
-      materials.hair,
-      [HEAD.width + thickness, HEAD.height + thickness, HEAD.depth + thickness],
-      [0, 0.005, 0.005],
-    ),
-  )
-  // 後腦偏低的位置盤一個圓包頭,稍微嵌進髮蓋
+  const capRadii = HEAD.radii.map((radius) => radius + thickness)
+  const caps = hairCapGeometries.map((geometry) => part(geometry, materials.hair, capRadii, [0, 0.005, 0.005]))
   const bun = part(ball, materials.hair, [0.095, 0.09, 0.08], [0, -0.06, 0.235])
-  return [part(ball, materials.skin, [HEAD.width, HEAD.height, HEAD.depth], [0, 0, 0]), ...caps, bun]
+  return [part(ball, materials.skin, HEAD.radii, [0, 0, 0]), ...caps, bun]
 }
 
 /**
@@ -235,9 +230,18 @@ function createHairCapGeometries() {
   const { tilt, coverage, partStart, partGap, partOffset } = HAIR_CAP
   // SphereGeometry 的經度 phi 在 3π/2 是正前方(-z),往左(-x)是遞增
   const phiStart = (Math.PI * 3) / 2 + partOffset + partGap / 2
-  // 兩塊的頂點在交界上對不齊,會裂出一條細縫。靠軸心的那塊稍微大一點、往外多蓋一小段,把縫蓋住
-  const crown = new SphereGeometry(1.005, 12, 3, phiStart, Math.PI * 2, 0, partStart + 0.1)
-  const front = new SphereGeometry(1, 12, 3, phiStart, Math.PI * 2 - partGap, partStart, coverage - partStart)
+  // 兩塊的頂點在交界上對不齊,會裂出一條細縫。外圈那塊往軸心多鋪一小段,墊在稍微大一點的靠軸心那塊底下,把縫蓋住
+  const overlap = 0.1
+  const crown = new SphereGeometry(1.005, 12, 3, phiStart, Math.PI * 2, 0, partStart)
+  const front = new SphereGeometry(
+    1,
+    12,
+    3,
+    phiStart,
+    Math.PI * 2 - partGap,
+    partStart - overlap,
+    coverage - partStart + overlap,
+  )
   // 繞 x 軸轉正的角度,朝上的軸心會倒向 +z,也就是後面
   for (const geometry of [crown, front]) geometry.rotateX(tilt)
   return [crown, front]
@@ -247,7 +251,7 @@ function createHairCapGeometries() {
 function collarParts(box, collarGeometry, materials) {
   const band = part(collarGeometry, materials.shirt, [1, 1, 1], [0, SHOULDER.y + 0.02, 0])
   const points = [-1, 1].map((side) => {
-    const point = part(box, materials.shirt, [0.06, 0.05, 0.015], [side * 0.04, SHOULDER.y - 0.02, -0.095])
+    const point = part(box, materials.shirt, [0.06, 0.05, 0.015], [side * 0.04, SHOULDER.y - 0.02, -0.1])
     point.rotation.z = side * 0.6
     return point
   })
@@ -255,8 +259,8 @@ function collarParts(box, collarGeometry, materials) {
 }
 
 // 腰帶右側的蝴蝶結:中間的結、往兩邊翹起的兩個環,以及兩條垂下來的帶尾。
-// 原點在腰帶右後方的轉角,蝴蝶結的正面朝 +x。整個蝴蝶結斜斜地朝向右後方,從背後也看得到環與帶尾的正面
-function bowParts(box, materials) {
+// 原點在腰帶右後方的轉角附近,蝴蝶結的正面朝 +x。整個蝴蝶結斜斜地朝向右後方,從背後也看得到環與帶尾的正面
+function createBow(box, materials) {
   const bow = new Group()
   bow.position.set(BELT.width / 2 - 0.025, BELT.y, BELT.depth / 2 - 0.035)
   bow.rotation.y = -0.6
@@ -264,7 +268,7 @@ function bowParts(box, materials) {
 
   for (const side of [-1, 1]) {
     // side 為 1 的在後面。兩個環都是遠離結的那一端往上翹
-    const loop = part(box, materials.tiger, [0.025, 0.065, 0.1], [0.012, 0.012, side * 0.06])
+    const loop = part(box, materials.tiger, [0.025, 0.065, 0.085], [0.012, 0.012, side * 0.055])
     loop.rotation.x = -side * 0.35
     bow.add(loop)
 
@@ -272,7 +276,7 @@ function bowParts(box, materials) {
     const length = 0.28
     const strip = part(box, materials.tiger, [length, 0.012, 0.04], [0, -length / 2, 0])
     strip.rotation.z = Math.PI / 2
-    // 帶尾的原點在結的下緣。先繞自己的長軸扭一下,平的那一面才有一部分朝向背後或前面,再往前後張開
+    // 帶尾的原點在結的下半部。先繞自己的長軸扭一下,平的那一面才有一部分朝向背後或前面,再往前後張開
     const tail = new Group()
     tail.position.set(0.012, -0.015, side * 0.015)
     tail.rotation.set(-side * 0.15, -side * 0.35, 0)
