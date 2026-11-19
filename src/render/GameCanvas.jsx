@@ -11,7 +11,8 @@ import { createLetterFigures } from './letterFigures.js'
 import { CELL_SIZE, createMazeScene, toWorld } from './mazeScene.js'
 import { createPlayerFigure } from './playerFigure.js'
 
-// 一幀最多推進幾秒。分頁切走時動畫迴圈會停下,切回來的第一幀不該讓主角一口氣跑出一大段
+// 一幀最多推進幾秒。分頁切走時動畫迴圈會停下,切回來的第一幀不該讓主角一口氣跑出一大段。
+// 倒數也只扣這麼多,所以畫面每秒更新不到 10 次時,倒數會走得比真實時間慢
 const MAX_FRAME_SECONDS = 0.1
 
 /**
@@ -26,8 +27,11 @@ const MAX_FRAME_SECONDS = 0.1
  * `active` 變成 false 時,被畫布鎖住的游標會被放開,玩家才點得到疊在畫布上的按鈕。
  *
  * 介面層透過三個 callback 得知遊戲與游標的狀態:
- * - `onStatusChange({ canInteract, progress, doorOpen, atDoor, finished })`:其中任何一項有變時呼叫,
- *   每一局的第一幀也會呼叫一次。各項的意思與遊戲核心的同名屬性相同。
+ * - `onStatusChange({ canInteract, progress, doorOpen, atDoor, finished, failed, countdown })`:
+ *   其中任何一項有變時呼叫,每一局的第一幀也會呼叫一次。
+ *   countdown 是遊戲核心的倒數無條件進位成的整數秒,不限時的一局是 null。
+ *   它只在這個整數改變時才算有變,所以倒數不會讓這個 callback 每一幀都被呼叫。
+ *   其餘各項的意思與遊戲核心的同名屬性相同。
  * - `onInteract(result)`:每按一次 F,遊戲核心處理完之後呼叫。result 是遊戲核心 `interact()` 的回傳值。
  * - `onPointerLockChange(locked)`:游標的鎖定狀態可能變了時呼叫,locked 是游標當下是不是鎖在畫布上。
  *   下列三種時候都會呼叫:
@@ -198,6 +202,9 @@ function statusOf(game) {
     doorOpen: game.doorOpen,
     atDoor: game.atDoor,
     finished: game.finished,
+    failed: game.failed,
+    // 無條件進位:5 分鐘的一局一開始是 300,剩 0.4 秒時還是 1,歸零的那一刻才是 0
+    countdown: game.countdown === null ? null : Math.ceil(game.countdown),
   }
 }
 

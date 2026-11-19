@@ -33,11 +33,13 @@ const MUSIC = {
  * 各畫面播哪一首曲子。沒列在這裡的畫面不播音樂。
  *
  * 換畫面時曲子不變,就接著播,不淡出也不從頭播。暫停畫面因此沿用遊戲中的曲子,短暫的停頓不會打斷氣氛。
+ * 失敗畫面播開始畫面那首平靜的曲子,所以從失敗畫面回到開始畫面時,曲子也是接著播。
  */
 const MUSIC_OF_SCREEN = {
   start: 'pleasantCreek',
   playing: 'flowerbedFields',
   paused: 'flowerbedFields',
+  failed: 'pleasantCreek',
   finished: 'happyBirthday',
 }
 
@@ -64,7 +66,7 @@ const DECLICK_SECONDS = 0.03
  * 建立遊戲的聲音。建立時就開始下載音檔,但在呼叫 `unlock()` 之前不會發出任何聲音。
  *
  * - `unlock()` 必須在使用者的點擊或按鍵事件裡呼叫,否則瀏覽器會讓它一直保持無聲。呼叫第二次沒有效果。
- * - `setScreen(screen)` 告訴它目前在哪個畫面:`'entry'`、`'start'`、`'playing'`、`'paused'` 或 `'finished'`。
+ * - `setScreen(screen)` 告訴它目前在哪個畫面:`'entry'`、`'start'`、`'playing'`、`'paused'`、`'failed'` 或 `'finished'`。
  *   新畫面的曲子與上一個畫面不同時,上一首停下或淡出,接著播新畫面的曲子。
  *   曲子相同時接著播,所以同一個畫面重複呼叫,或在共用同一首的畫面之間切換,都不會讓音樂從頭播。
  *   `unlock()` 之前也可以呼叫,解鎖時就從當下畫面的曲子開始播。

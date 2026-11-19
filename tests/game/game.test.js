@@ -1,5 +1,5 @@
 // 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
-// 依通關字串收集字母,開門與破關,以及測試用的傳送 hook。
+// 依通關字串收集字母,開門與破關,時限與挑戰失敗,以及測試用的傳送 hook。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -550,6 +550,89 @@ describe('門與破關', () => {
         expect(isCovered(walls, sideMidpointOf(wall, wall.side)), `seed ${seed} ${keyOf(wall)} ${wall.side}`).toBe(true)
       }
     }
+  })
+})
+
+describe('時限與挑戰失敗', () => {
+  it('不限時的一局沒有倒數,推進再久也不會挑戰失敗', () => {
+    const game = createGame(1)
+    expect(game.countdown).toBeNull()
+    expect(game.failed).toBe(false)
+    run(game, {}, 24 * 60 * 60, 60)
+    expect(game.countdown).toBeNull()
+    expect(game.failed).toBe(false)
+  })
+
+  it('有時限的一局,倒數從時限開始,每推進一步就少掉那一步的秒數', () => {
+    const game = createGame(1, { timeLimit: 300 })
+    expect(game.countdown).toBe(300)
+    game.step({ forward: 1, right: 0, heading: 0, dt: 0.5 })
+    expect(game.countdown).toBe(299.5)
+    game.step({ forward: 0, right: 1, heading: 0, dt: 0.25 })
+    expect(game.countdown).toBe(299.25)
+  })
+
+  it('主角站著不動時,倒數照樣減少', () => {
+    const game = createGame(1, { timeLimit: 300 })
+    run(game, {}, 2, 0.5)
+    expect(game.countdown).toBe(298)
+  })
+
+  it('倒數歸零的那一步挑戰失敗,倒數停在 0', () => {
+    const game = createGame(1, { timeLimit: 300 })
+    run(game, {}, 299, 1)
+    expect(game.failed, '還剩 1 秒').toBe(false)
+    // 這一步比剩下的時間還長,倒數也不會變成負的
+    game.step({ forward: 0, right: 0, heading: 0, dt: 1.5 })
+    expect(game.failed).toBe(true)
+    expect(game.countdown).toBe(0)
+  })
+
+  it('挑戰失敗之後,推進不會移動主角,互動不會增加進度', () => {
+    const game = createGame(1, { allowTeleport: true, timeLimit: 300 })
+    run(game, {}, 300, 1)
+    const before = game.player
+    run(game, { forward: 1, heading: 1.2 }, 1)
+    expect(game.player, '推進').toEqual(before)
+    expect(interactAt(game, 'H'), '互動').toBeNull()
+    expect(game.progress, '互動').toBe(0)
+  })
+
+  it('門打開後,主角還沒走出門時倒數歸零,是挑戰失敗而不是破關', () => {
+    for (const seed of SEEDS) {
+      // 時限只夠從門所在那一格的中央往門跑不到半格,時間用完時主角還在迷宮裡
+      const game = createGame(seed, { allowTeleport: true, timeLimit: 0.4 / RUN_SPEED })
+      collectFirst(game, 13)
+      game.teleport(game.door)
+      game.step({ forward: 1, right: 0, heading: HEADINGS[game.door.side], dt: 0.4 / RUN_SPEED })
+      expect(game.failed, `seed ${seed}`).toBe(true)
+      expect(game.finished, `seed ${seed}`).toBe(false)
+    }
+  })
+
+  it('主角走出門的那一步剛好用完時間,是破關而不是挑戰失敗', () => {
+    for (const seed of SEEDS) {
+      // 時限剛好夠從門所在那一格的中央跑一格,這一步出了門,時間也正好用完
+      const game = createGame(seed, { allowTeleport: true, timeLimit: 1 / RUN_SPEED })
+      collectFirst(game, 13)
+      game.teleport(game.door)
+      game.step({ forward: 1, right: 0, heading: HEADINGS[game.door.side], dt: 1 / RUN_SPEED })
+      expect(game.countdown, `seed ${seed}`).toBe(0)
+      expect(game.finished, `seed ${seed}`).toBe(true)
+      expect(game.failed, `seed ${seed}`).toBe(false)
+    }
+  })
+
+  it('破關之後繼續推進,倒數不再減少,也不會變成挑戰失敗', () => {
+    const game = createGame(1, { allowTeleport: true, timeLimit: 300 })
+    collectFirst(game, 13)
+    game.teleport(game.door)
+    run(game, { forward: 1, heading: HEADINGS[game.door.side] }, 1 / RUN_SPEED)
+    expect(game.finished).toBe(true)
+    const countdown = game.countdown
+    run(game, {}, 600, 1)
+    expect(game.countdown).toBe(countdown)
+    expect(game.failed).toBe(false)
   })
 })
 
