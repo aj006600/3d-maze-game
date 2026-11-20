@@ -49,7 +49,7 @@ export const PASSENGERS = {
   // 停下來站多久:在這兩個秒數之間隨機
   pauseSeconds: [1, 3],
   // 主角離奧客的直線距離在這麼多格以內、兩者中心的連線又沒有被牆擋住時,奧客發現主角
-  discoverDistance: 3,
+  discoverDistance: 5,
   // 追趕的速度。它比主角跑得快,主角才甩不掉發現他的奧客
   chaseSpeed: 1.1,
   // 每被揮擊打中一次,停在原地硬直幾秒

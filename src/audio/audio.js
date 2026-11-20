@@ -66,12 +66,14 @@ const SOUNDS = {
   countdownWarning: { url: countdownWarningSoundUrl, volume: 0.35, delaySeconds: 0 },
   // 揮空時登機箱往下砸的聲音,在箱子甩過身體前方的那一刻播。打中奧客的那一下改播下面兩個之一
   swing: { url: swingSoundUrl, volume: 0.35, delaySeconds: 0 },
+  // 下面三個奧客的音效,原檔的平均響度和遊戲中的音樂差不多,音量照其他音效設 0.35 會比音樂還小聲而被蓋掉。
+  // 打中的悶響又是低頻,筆電喇叭放不太出來。所以它們的音量調高,播出來的平均響度和收集成功的叮聲相近
   // 打中奧客、還沒擊倒他時的悶響
-  passengerHit: { url: passengerHitSoundUrl, volume: 0.35, delaySeconds: 0 },
+  passengerHit: { url: passengerHitSoundUrl, volume: 0.7, delaySeconds: 0 },
   // 第 3 下擊倒奧客時的聲音,要和打中的悶響聽得出不同
-  knockDown: { url: knockDownSoundUrl, volume: 0.35, delaySeconds: 0 },
+  knockDown: { url: knockDownSoundUrl, volume: 0.75, delaySeconds: 0 },
   // 奧客發現主角的那一刻播一聲。奧客可能從背後追上來,玩家要聽得到
-  discovered: { url: discoveredSoundUrl, volume: 0.35, delaySeconds: 0 },
+  discovered: { url: discoveredSoundUrl, volume: 0.7, delaySeconds: 0 },
 }
 
 // 不淡出的轉場與靜音也不是瞬間把音量切成 0:瞬間切斷會聽到「啪」的一聲
