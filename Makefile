@@ -1,5 +1,5 @@
 # 專案名:compose project 名與本機 image 名都從這裡來
-APP_NAME := 3d-maze-game
+APP_NAME := hbd-3d-maze-game
 
 # shell 裡殘留的 COMPOSE_PROJECT_NAME 會蓋掉「project 名取目錄名」:所有 worktree 擠進同一組 container,
 # worktree-rm 也收不到正確的那組。一律不帶給 compose

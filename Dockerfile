@@ -1,6 +1,6 @@
 FROM node:22-slim AS base
 # 專案 label:make clean 只清帶它的 image;dev 與 build 從 base 繼承
-LABEL org.opencontainers.image.title="3d-maze-game"
+LABEL org.opencontainers.image.title="hbd-3d-maze-game"
 WORKDIR /app
 COPY package.json package-lock.json ./
 # npm ci 預設連 devDependencies 一起裝:build 要用 vite,dev 要用 vitest、eslint 與 prettier

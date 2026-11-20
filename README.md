@@ -2,7 +2,7 @@
 
 一個祝人生日快樂的 3D 迷宮小遊戲。
 
-**[在瀏覽器裡玩](https://aj006600.github.io/3d-maze-game/)**(用桌機,需要鍵盤和滑鼠)
+**[在瀏覽器裡玩](https://aj006600.github.io/hbd-3d-maze-game/)**(用桌機,需要鍵盤和滑鼠)
 
 <!-- README 對外把奧客稱作老鼠;GLOSSARY、程式碼與遊戲畫面仍稱奧客 -->
 

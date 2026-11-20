@@ -20,7 +20,7 @@ Trunk-based:`main` 是唯一長期分支,所有改動走短命 feature branch �
 
 說了 `in worktree` 才走 worktree 流程,沒說就照上面在主 checkout 切分支開工。開工前先 `git worktree list`:已有別的 worktree 在,代表有 session 在平行做,先問我要不要也進 worktree。
 
-worktree 流程:主 checkout 跑 `make worktree ISSUE=<n> BRANCH=feat/<slug>`,再用 EnterWorktree 的 `path` 進 `.claude/worktrees/3d-maze-game-issue-<n>`;push 完先 ExitWorktree(keep),再從主 checkout 跑 `make worktree-rm ISSUE=<n>`。手上沒有 issue 編號就先問我。branch 刻意不追蹤 `origin/main`,第一次 push 寫明 `git push -u origin feat/<slug>`。
+worktree 流程:主 checkout 跑 `make worktree ISSUE=<n> BRANCH=feat/<slug>`,再用 EnterWorktree 的 `path` 進 `.claude/worktrees/hbd-3d-maze-game-issue-<n>`;push 完先 ExitWorktree(keep),再從主 checkout 跑 `make worktree-rm ISSUE=<n>`。手上沒有 issue 編號就先問我。branch 刻意不追蹤 `origin/main`,第一次 push 寫明 `git push -u origin feat/<slug>`。
 
 一段工作完成後可自行 push feature branch,但**開 PR 前要先問過我**——PR 是 CI 的觸發點。PR 與 merge 進 `main` 只跑測試、lint 與 build 檢查;打 `vX.Y.Z` tag 才把靜態檔發佈到 GitHub Pages,退回舊版是對舊的 tag 重跑發佈的 workflow(見 `docs/deployment.md`)。
 
