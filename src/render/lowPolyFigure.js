@@ -1,6 +1,6 @@
 // 用幾何體拼成的低多邊形角色的共同做法:拼裝部件、畫貼圖、擺到地面上,以及跑步動作的節奏。
 // 角色不使用模型、動畫或圖片素材檔,外觀、貼圖與動作都在程式裡算出來。
-import { CanvasTexture, Mesh, SRGBColorSpace } from 'three'
+import { BoxGeometry, CanvasTexture, Mesh, SRGBColorSpace } from 'three'
 
 // 跑步動作在起跑與停下時漸強與漸弱的速度:每秒從靜止到全速幾次
 const BLEND_RATE = 8
@@ -47,10 +47,16 @@ export function placeFigure(object, { x, z }, heading) {
   object.rotation.y = -heading
 }
 
+/** 從 value 往 target 靠近,最多移動 maxStep,不會越過 target。 */
+export function approach(value, target, maxStep) {
+  return value + Math.sign(target - value) * Math.min(Math.abs(target - value), maxStep)
+}
+
 /**
- * 跑完 strideLength 的距離就走完一個完整的步伐循環。
+ * 跟著移動的距離推進步伐循環,每移動一個步伐長度就走完一個完整的循環。
  *
- * 每一幀呼叫 `advance(distance, dt)`,distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒。
+ * 每一幀呼叫 `advance(distance, dt, stride)`,distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒。
+ * stride 是這一幀的步伐長度;省略時用建立時的 strideLength。走路與跑步步伐不同的角色,每一幀傳當下的步伐長度。
  * 回傳 `{ phase, blend }`:
  * - phase 是步伐的相位,在 0 到 2π 之間。它跟著移動的距離前進,腳步才會與地面的速度一致。
  * - blend 是跑步動作的強度,0 是站姿、1 是全速。起跑時漸強,停下後很快回到 0 並保持靜止。
@@ -59,12 +65,30 @@ export function createRunCycle(strideLength) {
   let phase = 0
   let blend = 0
   return {
-    advance(distance, dt) {
+    advance(distance, dt, stride = strideLength) {
       const running = dt > 0 && distance > MIN_RUN_SPEED * dt
-      phase = (phase + (distance / strideLength) * Math.PI * 2) % (Math.PI * 2)
+      phase = (phase + (distance / stride) * Math.PI * 2) % (Math.PI * 2)
       const target = running ? 1 : 0
-      blend += Math.sign(target - blend) * Math.min(Math.abs(target - blend), BLEND_RATE * dt)
+      blend = approach(blend, target, BLEND_RATE * dt)
       return { phase, blend }
     },
   }
+}
+
+/**
+ * 上下兩個面大小不同的長方體,原點在中心。
+ *
+ * bottom 與 top 都是 `[寬, 深]`,分別是 x 與 z 方向的長度。四個側面仍然是平面,低多邊形的稜角才會一致。
+ */
+export function taperedBox(height, [bottomWidth, bottomDepth], [topWidth, topDepth]) {
+  const geometry = new BoxGeometry(1, height, 1)
+  const position = geometry.attributes.position
+  for (let i = 0; i < position.count; i += 1) {
+    const [width, depth] = position.getY(i) > 0 ? [topWidth, topDepth] : [bottomWidth, bottomDepth]
+    position.setX(i, position.getX(i) * width)
+    position.setZ(i, position.getZ(i) * depth)
+  }
+  // 側面斜了,原本的法向量不再垂直於側面,光影會不對
+  geometry.computeVertexNormals()
+  return geometry
 }
