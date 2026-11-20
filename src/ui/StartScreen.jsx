@@ -11,7 +11,7 @@ import { backdrop, panel, primaryButton, secondaryButton, title } from './screen
 const CONTROL_HINTS = [
   { keys: ['W', 'A', 'S', 'D'], action: 'W 前進、S 倒退、A 與 D 橫移' },
   { keys: ['滑鼠'], action: '轉動視角,主角跟著轉向' },
-  { keys: ['F'], action: '站進有字母的死路時收集字母' },
+  { keys: ['F'], action: '站進有字母的角落時收集字母' },
   { keys: ['滑鼠左鍵', '空白鍵'], separator: '/', action: '揮擊登機箱,擊倒擋路的奧客' },
   { keys: ['Esc'], action: '暫停' },
   { keys: ['M'], action: '靜音' },
@@ -30,7 +30,7 @@ export default function StartScreen({ timeLimit, onTimeLimitChange, onStart }) {
     <div style={styles.backdrop}>
       <section style={styles.panel}>
         <h1 style={styles.title}>生日迷宮</h1>
-        <p style={styles.goal}>在迷宮的死路裡依序收集 {PHRASE} 的字母,集滿後從打開的門走出去。</p>
+        <p style={styles.goal}>在迷宮的角落裡依序收集 {PHRASE} 的字母,集滿後從打開的門走出去。</p>
         <ul style={styles.hints}>
           {CONTROL_HINTS.map(({ keys, separator, action }) => (
             <li key={action} style={styles.hint}>

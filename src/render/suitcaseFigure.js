@@ -46,7 +46,7 @@ const BADGE = { radius: 0.03, thickness: 0.008, inset: 0.06 }
 // 提把是一根橫桿架在兩個底座上。頂部的提把沿著箱子的寬度方向,側面的提把在遠離主角的那一側、沿著厚度方向。
 // lift 是橫桿中心離箱殼表面的距離
 const HANDLE = { length: 0.15, bar: [0.022, 0.03], mount: 0.03, lift: 0.03, topZ: -0.015, sideY: 0.43 }
-// 萬向輪:每個角落一組並排的兩個輪子。inset 是輪軸中心離箱身側面與正背面的距離,輪軸離地的高度就是輪子的半徑
+// 萬向輪:箱底每個角一組並排的兩個輪子。inset 是輪軸中心離箱身側面與正背面的距離,輪軸離地的高度就是輪子的半徑
 const WHEEL = { radius: 0.035, width: 0.016, gap: 0.012, inset: 0.05 }
 // 伸縮拉桿:兩根桿子從箱頂靠拉桿那一面的地方伸出來,每根分成粗細兩節,上面接著橫的握把。z 是桿子的位置
 const BAR = { spacing: 0.26, z: -SHELL.depth / 2 + 0.035, outer: 0.026, inner: 0.018 }
@@ -279,7 +279,7 @@ function handleParts(box, material) {
   ]
 }
 
-// 四個角落的萬向輪。每組是蓋住輪子上半部的輪座,加上輪軸上並排的兩個輪子;axle 繞 x 軸轉就是輪子在滾
+// 箱底四個角的萬向輪。每組是蓋住輪子上半部的輪座,加上輪軸上並排的兩個輪子;axle 繞 x 軸轉就是輪子在滾
 function casterParts(box, tire, rim, materials) {
   const housingHeight = CLEARANCE - WHEEL.radius - 0.01
   const housingSize = [WHEEL.width * 2 + WHEEL.gap + 0.008, housingHeight, 0.05]

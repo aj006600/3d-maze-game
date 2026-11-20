@@ -1,5 +1,5 @@
 // 迷宮的產生與查詢。
-// 用 growing tree 演算法、每一步隨機挑一個進行中的格子往外挖;這樣挖出來的死路比例高,
+// 用 growing tree 演算法、每一步隨機挑一個進行中的格子往外挖;這樣挖出來的角落比例高,
 // 才放得下 A 到 Z 各一個字母。
 
 /** 往每一側走一格時 col 與 row 的變化。方向的契約:row 往南遞增,col 往東遞增。 */
@@ -59,7 +59,7 @@ export function generateMaze(size, random) {
   }
 }
 
-/** 列出迷宮裡所有的死路,也就是只有一個開口的格子。 */
+/** 列出迷宮裡所有的角落,也就是只有一個開口的格子。 */
 export function deadEndsOf(maze) {
   const deadEnds = []
   for (let row = 0; row < maze.size; row += 1) {

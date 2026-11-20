@@ -104,7 +104,7 @@ describe('createGame 的迷宮', () => {
     }
   })
 
-  it('至少有 26 個死路', () => {
+  it('至少有 26 個角落', () => {
     for (const seed of SEEDS) {
       const { maze } = createGame(seed)
       const deadEnds = cellsOf(maze).filter((cell) => maze.openings(cell).length === 1)
@@ -154,7 +154,7 @@ describe('createGame 的字母', () => {
     }
   })
 
-  it('每個字母都在死路裡', () => {
+  it('每個字母都在角落裡', () => {
     for (const seed of SEEDS) {
       const { maze, letters } = createGame(seed)
       for (const { letter, col, row } of letters) {
@@ -337,7 +337,7 @@ const isPassengerNear = (game, cell) =>
   game.passengers.some((passenger) => Math.hypot(passenger.x - cell.col - 0.5, passenger.y - cell.row - 0.5) < 3.5)
 
 // 只看主角的測試用它先把奧客請開:主角躲起來推進一會兒,直到沒有奧客在 cell 附近。
-// 主角躲起來時擋不到任何一位奧客,也不會被發現,遊蕩的奧客遲早會走開,但可能在死路多的地方繞上一兩分鐘。
+// 主角躲起來時擋不到任何一位奧客,也不會被發現,遊蕩的奧客遲早會走開,但可能在角落多的地方繞上一兩分鐘。
 // 發現過主角的奧客會一直追趕、不會走開,所以 game 要是還沒有奧客發現主角的一局
 function waitForPassengersToLeave(game, cell) {
   for (let i = 0; i < 10 * 60; i += 1) {
@@ -430,7 +430,7 @@ describe('通關字串', () => {
 })
 
 describe('可互動', () => {
-  it('主角站在有字母的死路格內時可以互動,其他格子都不行', () => {
+  it('主角站在有字母的角落裡時可以互動,其他格子都不行', () => {
     for (const seed of SEEDS.slice(0, 5)) {
       const game = createGame(seed, { allowTeleport: true })
       const letterCells = new Set(game.letters.map(keyOf))
@@ -477,7 +477,7 @@ describe('收集', () => {
     }
   })
 
-  it('不在字母所在的死路格內時互動,沒有任何效果', () => {
+  it('不在字母所在的角落裡時互動,沒有任何效果', () => {
     for (const seed of SEEDS.slice(0, 5)) {
       const game = createGame(seed, { allowTeleport: true })
       interactAt(game, 'H')
@@ -490,14 +490,14 @@ describe('收集', () => {
     }
   })
 
-  it('只是走進字母所在的死路再走出來,沒有互動就沒有任何效果', () => {
+  it('只是走進字母所在的角落再走出來,沒有互動就沒有任何效果', () => {
     for (const seed of SEEDS) {
       const game = createGame(seed, { allowTeleport: true })
       const h = game.letters.find(({ letter }) => letter === 'H')
-      // 這裡只看收集:主角跑進死路時可能撞上附近的奧客,所以先等奧客走開
+      // 這裡只看收集:主角跑進角落時可能撞上附近的奧客,所以先等奧客走開
       waitForPassengersToLeave(game, h)
       const [opening] = game.maze.openings(h)
-      // 從死路開口外的那一格出發,跑進字母那一格的中央再跑回來
+      // 從角落開口外的那一格出發,跑進字母那一格的中央再跑回來
       game.teleport(stepOf(h, opening))
       run(game, { forward: 1, heading: HEADINGS[OPPOSITE[opening]] }, 1 / RUN_SPEED)
       expect(cellOf(game.player), `seed ${seed}`).toEqual({ col: h.col, row: h.row })
@@ -868,7 +868,7 @@ function trackPassengers(game, input, seconds, dt = FRAME) {
 }
 
 // 主角躲到迷宮外面,站著不動推進一秒:奧客只在迷宮裡走,碰不到迷宮外的主角,所以主角擋不到任何一位奧客的路。
-// 迷宮裡沒有這樣的地方:奧客幾乎塞滿走道,走進死路最裡面的那一格時,連躲在角落的主角也會碰到。
+// 迷宮裡沒有這樣的地方:奧客幾乎塞滿走道,走進角落時,連縮在牆角的主角也會碰到。
 // 躲起來的主角離每一位奧客都超過發現的距離,所以遊蕩的奧客也不會發現他。
 // 躲起來的主角不能移動,在迷宮外跑動會被當成走出了門
 function hidePlayer(game) {
@@ -925,7 +925,7 @@ describe('奧客的遊蕩', () => {
     expect(enteredDoorCell).toBe(true)
   })
 
-  it('遊蕩的奧客走得到迷宮的每一格,包括有字母的死路與門所在的那一格', () => {
+  it('遊蕩的奧客走得到迷宮的每一格,包括有字母的角落與門所在的那一格', () => {
     for (const seed of SEEDS.slice(0, 3)) {
       const game = hidePlayer(createGame(seed, { allowTeleport: true }))
       const visited = new Set(trackPassengers(game, {}, 60 * 60, 0.1).flatMap((frame) => frame.map(cellOf).map(keyOf)))
@@ -957,7 +957,7 @@ describe('奧客的遊蕩', () => {
     }
   })
 
-  it('遊蕩的奧客只在死路裡原路退出,沒有被擋住時不會在其他格子折返', () => {
+  it('遊蕩的奧客只在角落裡原路退出,沒有被擋住時不會在其他格子折返', () => {
     for (const seed of SEEDS.slice(0, 5)) {
       const game = hidePlayer(createGame(seed, { allowTeleport: true }))
       const frames = trackPassengers(game, {}, 120)
@@ -1288,8 +1288,8 @@ function stopFirstPassengerAtCorner(game) {
   return null
 }
 
-// 讓每一位奧客都發現主角,再把主角傳送進一個每一位奧客都還離得遠的死路,站著推進 30 秒,等奧客都追進來。
-// 字母都在死路裡,所以從有字母的格子裡挑。回傳這一局、那個死路的格子與每一步的奧客快照
+// 讓每一位奧客都發現主角,再把主角傳送進一個每一位奧客都還離得遠的角落,站著推進 30 秒,等奧客都追進來。
+// 字母都在角落裡,所以從有字母的格子裡挑。回傳這一局、那個角落的格子與每一步的奧客快照
 function chaseIntoDeadEnd(seed) {
   const game = createGame(seed, { allowTeleport: true })
   for (let i = 0; i < PASSENGERS.count; i += 1) discoverPlayer(game, i)
@@ -1401,7 +1401,7 @@ describe('奧客的碰撞與擋路', () => {
     expect(tested).toBeGreaterThan(0)
   })
 
-  it('主角走進死路之後,跟進來的奧客把死路的開口擋住,主角正面或貼著走道的一側都出不去', () => {
+  it('主角走進角落之後,跟進來的奧客把角落的開口擋住,主角正面或貼著走道的一側都出不去', () => {
     for (const seed of COLLISION_SEEDS) {
       const { game, deadEnd } = chaseIntoDeadEnd(seed)
       const [opening] = game.maze.openings(deadEnd)
@@ -1412,7 +1412,7 @@ describe('奧客的碰撞與擋路', () => {
     }
   })
 
-  it('兩位奧客都追進死路時,在走道上排成一列,不會重疊', () => {
+  it('兩位奧客都追進角落時,在走道上排成一列,不會重疊', () => {
     for (const seed of COLLISION_SEEDS) {
       const { game, frames } = chaseIntoDeadEnd(seed)
       const label = `seed ${seed}`

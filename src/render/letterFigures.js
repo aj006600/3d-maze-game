@@ -1,4 +1,4 @@
-// 死路裡飄浮的立體字母:每個字母依點陣字形用小方塊拼成,不使用字型檔或任何素材檔。
+// 角落裡飄浮的立體字母:每個字母依點陣字形用小方塊拼成,不使用字型檔或任何素材檔。
 // 目標字母與干擾字母用完全相同的外觀;字母在哪一格由遊戲核心決定,這裡只負責外觀、擺放、飄浮動作與收集的回饋。
 import { BoxGeometry, Color, Group, InstancedMesh, Matrix4, MeshStandardMaterial, Object3D } from 'three'
 
@@ -37,12 +37,12 @@ const GLYPHS = {
 }
 
 const LETTER_COLOR = '#ff5fa2'
-// 字母平常微微發光的強度,在暗一點的死路裡也看得清楚
+// 字母平常微微發光的強度,在暗一點的角落裡也看得清楚
 const LETTER_GLOW = 0.25
 // 一個方塊的邊長與字母的厚度,單位與世界座標相同
 const PIXEL_SIZE = 0.24
 const DEPTH = 0.36
-// 字母中心離地的高度。字母飄到最低時,底部仍高過主角跑步時的頭頂,主角走進死路時不會穿過字母
+// 字母中心離地的高度。字母飄到最低時,底部仍高過主角跑步時的頭頂,主角走進角落時不會穿過字母
 const FLOAT_HEIGHT = 3
 const BOB_HEIGHT = 0.12
 const BOB_SECONDS = 2.4
@@ -81,11 +81,11 @@ const SPARK = {
 }
 const sparkPose = new Object3D()
 
-// 字母的正面預設朝 +z(南方)。死路的開口在哪一側,就繞 y 軸轉到正面朝向那一側,從走道上看到的才是正面
+// 字母的正面預設朝 +z(南方)。角落的開口在哪一側,就繞 y 軸轉到正面朝向那一側,從走道上看到的才是正面
 const FACING = { south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 }
 
 /**
- * 依遊戲核心的字母配置,在每個字母所屬的死路裡建立一個飄浮的立體字母。`object` 要由呼叫端加進場景。
+ * 依遊戲核心的字母配置,在每個字母所屬的角落裡建立一個飄浮的立體字母。`object` 要由呼叫端加進場景。
  *
  * 每一幀呼叫 `animate(seconds, cameraPosition)`:
  * - seconds 是單調遞增的時間,單位是秒;字母的飄浮動作與收集的回饋都由它推進。
@@ -126,7 +126,7 @@ export function createLetterFigures(game) {
     figure.add(mesh)
     const center = toWorld(maze, { x: col + 0.5, y: row + 0.5 })
     figure.position.set(center.x, FLOAT_HEIGHT, center.z)
-    // 死路只有一個開口
+    // 角落只有一個開口
     const [opening] = maze.openings({ col, row })
     object.add(figure)
     // 收集回饋要用的材質與小方塊,到第一次被收集時才建立
@@ -168,7 +168,7 @@ export function createLetterFigures(game) {
         mesh.material = feedback === null ? material : entry.flashMaterial
         if (feedback !== null) paintFlash(entry.flashMaterial, flashOf(feedback))
         if (entry.sparks !== null) placeSparks(entry.sparks, feedback)
-        // 主角從死路往外走時,跟在背後的鏡頭會穿過字母;穿過的那一下不藏起來,畫面會閃過一整片字母的顏色
+        // 主角從角落往外走時,跟在背後的鏡頭會穿過字母;穿過的那一下不藏起來,畫面會閃過一整片字母的顏色
         figure.visible = figure.position.distanceTo(cameraPosition) > HIDE_DISTANCE
       })
     },
@@ -208,7 +208,7 @@ function paintFlash(material, strength) {
 /**
  * 一個字母的收集回饋要噴出的那一圈小方塊,回傳 `{ mesh, trajectories }`。`mesh` 要由呼叫端加進場景。
  *
- * 噴出的位置固定在字母平常的中心,正面朝向死路的開口,不跟著字母轉,小方塊才會往四周散開。
+ * 噴出的位置固定在字母平常的中心,正面朝向角落的開口,不跟著字母轉,小方塊才會往四周散開。
  * 每個小方塊的方向與速度在建立時決定,之後每一次回饋都照同樣的軌跡噴。mesh 用完由呼叫端 dispose。
  */
 function createSparks(geometry, material, { figure, facing }) {
