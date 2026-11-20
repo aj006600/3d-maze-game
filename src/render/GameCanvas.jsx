@@ -19,6 +19,7 @@ const MAX_FRAME_SECONDS = 0.1
 /**
  * 填滿父元素的遊戲畫布。游標鎖在畫布上時,用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動,按滑鼠左鍵或空白鍵揮擊。
  * 收集成功時,被收集的字母、主角與狗會在畫布上播收集的回饋。主角揮擊的動作跟著遊戲核心的揮擊進度播。
+ * 奧客擋在鏡頭與主角之間時變成半透明。
  *
  * 遊戲只在 `active` 為 true、而且游標鎖在畫布上時推進。其餘時候畫面照常繪製,但遊戲停住:
  * - 主角停在原地,朝向不變。揮到一半的揮擊停在那裡,遊戲再推進時接著揮。
@@ -27,7 +28,7 @@ const MAX_FRAME_SECONDS = 0.1
  *
  * `active` 變成 false 時,被畫布鎖住的游標會被放開,玩家才點得到疊在畫布上的按鈕。
  *
- * 介面層透過四個 callback 得知遊戲與游標的狀態:
+ * 介面層透過五個 callback 得知遊戲與游標的狀態:
  * - `onStatusChange({ canInteract, progress, doorOpen, atDoor, finished, failed, countdown })`:
  *   其中任何一項有變時呼叫,每一局的第一幀也會呼叫一次。
  *   countdown 是遊戲核心的倒數無條件進位成的整數秒,不限時的一局是 null。
@@ -36,6 +37,7 @@ const MAX_FRAME_SECONDS = 0.1
  * - `onInteract(result)`:每按一次 F,遊戲核心處理完之後呼叫。result 是遊戲核心 `interact()` 的回傳值。
  * - `onSwingStrike()`:主角揮擊、登機箱甩過身體前方的那一刻呼叫,每次揮擊一次,揮空也呼叫。
  *   遊戲停住時揮擊也停住,所以揮到一半之前暫停的話,繼續之後才會呼叫。
+ * - `onDiscovered()`:有奧客發現主角的那一幀呼叫。同一幀有兩位奧客發現主角時只呼叫一次。
  * - `onPointerLockChange(locked)`:游標的鎖定狀態可能變了時呼叫,locked 是游標當下是不是鎖在畫布上。
  *   下列三種時候都會呼叫:
  *   - 鎖定成功。
@@ -51,7 +53,7 @@ const MAX_FRAME_SECONDS = 0.1
  * 卸載時釋放 renderer、geometry 與 material,畫布也會從頁面上移除。
  */
 const GameCanvas = forwardRef(function GameCanvas(
-  { game, active, onStatusChange, onInteract, onSwingStrike, onPointerLockChange },
+  { game, active, onStatusChange, onInteract, onSwingStrike, onDiscovered, onPointerLockChange },
   ref,
 ) {
   const containerRef = useRef(null)
@@ -61,7 +63,7 @@ const GameCanvas = forwardRef(function GameCanvas(
   const cameraRef = useRef(null)
   // 動畫迴圈只在 game 換掉時重建,所以迴圈裡要透過 ref 讀到最新的 active 與 callback
   const activeRef = useRef(active)
-  const callbacksRef = useRef({ onStatusChange, onInteract, onSwingStrike, onPointerLockChange })
+  const callbacksRef = useRef({ onStatusChange, onInteract, onSwingStrike, onDiscovered, onPointerLockChange })
 
   useEffect(() => {
     activeRef.current = active
@@ -69,8 +71,8 @@ const GameCanvas = forwardRef(function GameCanvas(
   }, [active])
 
   useEffect(() => {
-    callbacksRef.current = { onStatusChange, onInteract, onSwingStrike, onPointerLockChange }
-  }, [onStatusChange, onInteract, onSwingStrike, onPointerLockChange])
+    callbacksRef.current = { onStatusChange, onInteract, onSwingStrike, onDiscovered, onPointerLockChange }
+  }, [onStatusChange, onInteract, onSwingStrike, onDiscovered, onPointerLockChange])
 
   useImperativeHandle(ref, () => ({
     lockPointer() {
@@ -165,6 +167,8 @@ const GameCanvas = forwardRef(function GameCanvas(
       }
       if (swingStruck(swingProgress, game.swingProgress)) callbacksRef.current.onSwingStrike?.()
       swingProgress = game.swingProgress
+      const passengers = game.passengers
+      if (discoveredBetween(passengersBefore, passengers)) callbacksRef.current.onDiscovered?.()
       if (game.doorOpen && !doorOpen) {
         doorOpen = true
         // 門那段牆從 game.walls 拿掉了,狗與鏡頭要重新讀牆,否則會把開著的門當成牆
@@ -189,9 +193,10 @@ const GameCanvas = forwardRef(function GameCanvas(
       const dogPose = dogFollower.follow(position, player.heading, dt)
       dogFigure.place(dogPose.position, dogPose.heading)
       dogFigure.animate(dogPose.distance, dt)
-      game.passengers.forEach((passenger, i) => {
+      passengers.forEach((passenger, i) => {
         passengerFigures[i].place(toWorld(game.maze, passenger), passenger.heading)
         passengerFigures[i].animate(travelledBetween(passengersBefore[i], passenger), dt)
+        passengerFigures[i].fadeIfBlocking(camera.position, position, dt)
       })
       letterFigures.animate(time / 1000, camera.position)
 
@@ -230,6 +235,11 @@ function statusOf(game) {
 // 從遊戲核心的位置 before 到 after 的距離,換算成世界座標的長度
 function travelledBetween(before, after) {
   return Math.hypot(after.x - before.x, after.y - before.y) * CELL_SIZE
+}
+
+// 這一幀有沒有奧客發現主角,也就是有奧客從遊蕩變成追趕。兩位在同一幀發現主角時也只算一次
+function discoveredBetween(before, after) {
+  return after.some((passenger, i) => passenger.state === 'chasing' && before[i].state === 'wandering')
 }
 
 // 這一幀揮擊的進度是不是跨過了 SWING_STRIKE。

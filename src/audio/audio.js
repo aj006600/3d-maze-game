@@ -13,6 +13,7 @@ import happyBirthdayUrl from './music/happy-birthday-music-box.mp3'
 import pleasantCreekUrl from './music/pleasant-creek-loop.ogg'
 import collectedSoundUrl from './sounds/confirmation_001.ogg'
 import countdownWarningSoundUrl from './sounds/glass_001.ogg'
+import discoveredSoundUrl from './sounds/error_006.ogg'
 import doorOpenedSoundUrl from './sounds/jingles_PIZZI10.ogg'
 import swingSoundUrl from './sounds/impactPlate_heavy_001.ogg'
 import wrongSoundUrl from './sounds/question_004.ogg'
@@ -63,6 +64,8 @@ const SOUNDS = {
   countdownWarning: { url: countdownWarningSoundUrl, volume: 0.35, delaySeconds: 0 },
   // 揮擊時登機箱往下砸的聲音,在箱子甩過身體前方的那一刻播,揮空也播
   swing: { url: swingSoundUrl, volume: 0.35, delaySeconds: 0 },
+  // 奧客發現主角的那一刻播一聲。奧客可能從背後追上來,玩家要聽得到
+  discovered: { url: discoveredSoundUrl, volume: 0.35, delaySeconds: 0 },
 }
 
 // 不淡出的轉場與靜音也不是瞬間把音量切成 0:瞬間切斷會聽到「啪」的一聲
@@ -76,7 +79,7 @@ const DECLICK_SECONDS = 0.03
  *   新畫面的曲子與上一個畫面不同時,上一首停下或淡出,接著播新畫面的曲子。
  *   曲子相同時接著播,所以同一個畫面重複呼叫,或在共用同一首的畫面之間切換,都不會讓音樂從頭播。
  *   `unlock()` 之前也可以呼叫,解鎖時就從當下畫面的曲子開始播。
- * - `playSound(event)` 播一次這個事件的音效:`'collected'`、`'wrong'`、`'doorOpened'`、`'countdownWarning'` 或 `'swing'`。
+ * - `playSound(event)` 播一次這個事件的音效:`'collected'`、`'wrong'`、`'doorOpened'`、`'countdownWarning'`、`'swing'` 或 `'discovered'`。
  *   前兩個與遊戲核心 `interact()` 的回傳值同名。`unlock()` 之前呼叫不會出聲,之後也不會補播。
  * - `setMuted(muted)` 切換靜音,音樂與音效一起安靜。靜音時音樂照樣往下播,只是聽不到。
  *

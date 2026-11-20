@@ -1,5 +1,6 @@
 // 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、選了哪個時限、有沒有靜音,
-// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開、倒數最後幾秒的每一秒、揮擊時登機箱揮下去)告訴音訊,由它播對應的音樂與音效。
+// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開、倒數最後幾秒的每一秒、揮擊時登機箱揮下去、奧客發現主角)告訴音訊,
+// 由它播對應的音樂與音效。
 //
 // 暫停只有一條規則:畫面停在遊戲中,而且游標鎖在畫布上,遊戲才推進。游標一放開就是暫停,
 // 不論是按 Esc、切到別的視窗還是切到別的分頁,瀏覽器都會放開游標,所以三者走同一條路。
@@ -65,6 +66,7 @@ export default function App() {
   )
 
   const handleSwingStrike = useCallback(() => audio.playSound('swing'), [audio])
+  const handleDiscovered = useCallback(() => audio.playSound('discovered'), [audio])
 
   useEffect(() => {
     audio.setScreen(screen)
@@ -163,6 +165,7 @@ export default function App() {
         onStatusChange={handleStatusChange}
         onInteract={handleInteract}
         onSwingStrike={handleSwingStrike}
+        onDiscovered={handleDiscovered}
         onPointerLockChange={handlePointerLockChange}
       />
       {inRound && status !== null && (

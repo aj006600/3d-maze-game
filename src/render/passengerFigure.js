@@ -1,6 +1,6 @@
 // 奧客的佔位人形:用長方體拼成的低多邊形造型,走路動作由程式計算,不使用模型、動畫或圖片素材檔。
 // 它只負責看得出是一個人、看得出臉朝哪裡:往前凸出的尖嘴與挺在前面的肚子都在正面,從背後看不到。
-// 這裡只負責外觀、擺放與動作;奧客在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的快照告訴它。
+// 這裡只負責外觀、擺放、動作,以及擋在鏡頭前面時變半透明;奧客在哪裡、朝哪裡、移動了多遠,都由呼叫端依遊戲核心的快照告訴它。
 import { BoxGeometry, Group, MeshStandardMaterial } from 'three'
 
 import { createRunCycle, part, placeFigure } from './lowPolyFigure.js'
@@ -33,6 +33,15 @@ const LEG_SWING = 0.5
 const ARM_SWING = 0.4
 const BOB_HEIGHT = 0.04
 
+// 從上方俯瞰,攤開的雙手從身體中線往外伸出多遠,也就是整個人最寬處的一半
+const HALF_SPAN = ARM.x + ARM.length * Math.sin(ARM.splay) + ARM.width / 2
+// 主角的身體從中線往外大約多寬。奧客的身體與主角的身體在畫面上有重疊時,才算遮住主角
+const PLAYER_HALF_WIDTH = 0.45
+// 擋住主角時的不透明度:看得到後面的主角,也看得出背後有人
+const SEE_THROUGH_OPACITY = 0.35
+// 每秒最多改變多少不透明度。變淡與恢復都是一下子完成,但不是一幀就跳過去,奧客在擋與不擋的邊界上時才不會閃爍
+const FADE_RATE = 5
+
 /**
  * 建立一位奧客的佔位人形,`object` 要由呼叫端加進場景。
  *
@@ -42,6 +51,9 @@ const BOB_HEIGHT = 0.04
  * - `place(position, heading)`:position 是世界座標地面上的 `{ x, z }`,heading 是遊戲核心的朝向。
  * - `animate(distance, dt)`:distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒。
  *   有在移動就播走路動作,停下後很快回到站姿並保持靜止。
+ * - `fadeIfBlocking(cameraPosition, target, dt)`:cameraPosition 是鏡頭這一幀在世界座標的位置,
+ *   target 是主角在世界座標地面上的 `{ x, z }`。奧客夾在鏡頭與主角之間、會遮住主角時漸漸變成半透明,離開之後漸漸恢復不透明。
+ *   它讀的是 `place` 擺好的位置,所以要在 `place` 之後呼叫。
  *
  * 用完必須呼叫 `dispose()` 釋放 geometry 與 material。
  */
@@ -116,6 +128,7 @@ export function createPassengerFigure() {
   object.add(leftLeg, rightLeg, upperBody)
 
   const runCycle = createRunCycle(STRIDE_LENGTH)
+  let opacity = 1
 
   return {
     object,
@@ -133,9 +146,38 @@ export function createPassengerFigure() {
       // 每跨一步身體起伏一次,所以用 |sin|
       upperBody.position.y = HIP_HEIGHT + Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
     },
+    fadeIfBlocking(cameraPosition, target, dt) {
+      const goal = blocksView(object.position, cameraPosition, target) ? SEE_THROUGH_OPACITY : 1
+      opacity += Math.sign(goal - opacity) * Math.min(Math.abs(goal - opacity), FADE_RATE * dt)
+      // 完全不透明時關掉 transparent,奧客才會和場景裡其他東西一樣照一般的順序畫。
+      // transparent 決定 shader 怎麼處理 alpha,切換時要讓 material 重新編譯
+      const transparent = opacity < 1
+      for (const material of Object.values(materials)) {
+        if (material.transparent !== transparent) {
+          material.transparent = transparent
+          material.needsUpdate = true
+        }
+        material.opacity = opacity
+      }
+    },
     dispose() {
       box.dispose()
       for (const material of Object.values(materials)) material.dispose()
     },
   }
+}
+
+// 從上方俯瞰,站在 position 的奧客會不會遮住鏡頭看向 target 的視線。
+// 奧客要在鏡頭與 target 之間,而且離視線夠近,近到他的身體與主角的身體在畫面上會重疊
+function blocksView(position, cameraPosition, target) {
+  const sightX = target.x - cameraPosition.x
+  const sightZ = target.z - cameraPosition.z
+  const length = Math.hypot(sightX, sightZ)
+  if (length === 0) return false
+  const offsetX = position.x - cameraPosition.x
+  const offsetZ = position.z - cameraPosition.z
+  const along = (offsetX * sightX + offsetZ * sightZ) / length
+  if (along <= 0 || along >= length) return false
+  const across = Math.abs(offsetX * sightZ - offsetZ * sightX) / length
+  return across < HALF_SPAN + PLAYER_HALF_WIDTH
 }
