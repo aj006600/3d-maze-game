@@ -1,9 +1,9 @@
 // 遊戲核心的公開介面:從一個 seed 建立一局遊戲,再以時間步推進主角、以互動鍵收集字母,收集完就能從門走出去破關。
-// 有時限的一局,倒數歸零時還沒破關就是挑戰失敗。迷宮裡有奧客在遊蕩,他們的身體會擋住主角。
+// 有時限的一局,倒數歸零時還沒破關就是挑戰失敗。迷宮裡有奧客在遊蕩,發現主角之後就一直追趕,他們的身體會擋住主角。
 // 主角可以揮擊登機箱,揮擊不影響移動與收集。
 // 核心不依賴 Three.js、React 與瀏覽器 API;渲染層與介面層只透過這裡讀狀態。
 import { PHRASE, SWING_SECONDS } from '../config.js'
-import { deadEndsOf, generateMaze, isSameCell } from './maze.js'
+import { cellOf, deadEndsOf, generateMaze, isInside, isSameCell } from './maze.js'
 import { moveCircle, PLAYER_RADIUS, wallsOf } from './movement.js'
 import { createPassengers } from './passengers.js'
 import { createRandom } from './random.js'
@@ -56,12 +56,15 @@ const RUN_SPEED = 1.25
  * - `passengers`:每一位奧客當下的 `{ x, y, heading, state, hits }`,一局裡的人數固定。
  *   每次讀取都是一份新的副本,改了它不會改到奧客,之後的推進也不會改到它。
  *   - `x`、`y`、`heading`:位置與朝向,座標與朝向的慣例與主角相同。開局時每一位都站在一格的中央。
- *   - `state`:`'wandering'` 是遊蕩。
+ *   - `state`:`'wandering'` 是遊蕩,`'chasing'` 是追趕。
+ *     遊蕩的奧客與主角的直線距離在設定模組的 `PASSENGERS.discoverDistance` 以內、兩者中心的連線又沒有被牆擋住時,
+ *     就發現主角,從這一步起追趕。奧客面向哪裡都一樣。追趕的奧客不會回到遊蕩,主角跑得再遠、躲到牆後面也一樣。
  *   - `hits`:被打中的次數。
  * - `step({ forward, right, heading, dt })`:推進 dt 秒。先把朝向設成 heading,再朝輸入的方向跑,然後奧客走 dt 秒。
  *   forward 為正是前進、為負是倒退;right 為正是往右橫移、為負是往左。方向以 heading 為準。
  *   兩者都是 0 就站著不動,否則不論大小都以同一個速度跑。主角碰到牆會被擋住,斜向撞牆時沿牆滑動。
  *   主角撞上奧客也會被擋住,斜向撞上時沿著奧客的邊緣滑動,但推不動他;奧客碰到主角就停下,不會把主角推開。
+ *   奧客在主角跑完之後才走,所以這一步的發現與追趕看的是主角跑完之後的位置。
  *   有時限的一局在破關之前,每一步都從倒數扣掉 dt 秒,站著不動的那一步也一樣。
  *   破關之後奧客不再動。挑戰失敗之後呼叫沒有任何效果:主角與奧客都不動,主角的朝向也不變。
  * - `swing()`:按下一次揮擊鍵,主角從頭揮擊一次。下列時候呼叫沒有效果,也不會排到之後才揮:
@@ -172,7 +175,7 @@ export function createGame(seed, { allowTeleport = false, timeLimit = null } = {
         if (!isInside(maze, player)) finished = true
       }
       // 挑戰失敗之後,這個方法一開始就回傳了,所以這裡只需要擋破關
-      if (!finished) passengers.step(dt, player)
+      if (!finished) passengers.step(dt, player, walls)
       // 移動並判定破關之後才判定倒數歸零:走出門的那一步剛好用完時間時算破關
       if (countdown === 0 && !finished) failed = true
     },
@@ -229,12 +232,4 @@ function placeLetters(random, candidates) {
 function letterAt(letters, position) {
   const cell = cellOf(position)
   return letters.find((placed) => isSameCell(placed, cell))
-}
-
-function cellOf({ x, y }) {
-  return { col: Math.floor(x), row: Math.floor(y) }
-}
-
-function isInside(maze, { x, y }) {
-  return x >= 0 && x < maze.size && y >= 0 && y < maze.size
 }

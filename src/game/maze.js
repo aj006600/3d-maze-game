@@ -79,3 +79,13 @@ export function stepOf(cell, side) {
 export function isSameCell(a, b) {
   return a.col === b.col && a.row === b.row
 }
+
+/** 平面上的位置 `{ x, y }` 落在哪一格。格子 `(col, row)` 涵蓋 `col ≤ x < col + 1`、`row ≤ y < row + 1`。 */
+export function cellOf({ x, y }) {
+  return { col: Math.floor(x), row: Math.floor(y) }
+}
+
+/** 平面上的位置 `{ x, y }` 在不在迷宮的範圍裡。 */
+export function isInside(maze, { x, y }) {
+  return x >= 0 && x < maze.size && y >= 0 && y < maze.size
+}

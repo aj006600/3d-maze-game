@@ -91,6 +91,9 @@ function pushOutOfCircle(obstacle, point, radius) {
 
 // 圓與長方形重疊時,把圓心沿著離長方形最近的那一點往外推,推到剛好碰到為止
 function pushOutOfWall(wall, point, radius) {
+  // 每次移動都要對整張迷宮的牆檢查一遍,其中絕大多數離得很遠;先用擴大 radius 的外框排除,省下開根號
+  if (point.x <= wall.minX - radius || point.x >= wall.maxX + radius) return
+  if (point.y <= wall.minY - radius || point.y >= wall.maxY + radius) return
   const nearestX = Math.min(Math.max(point.x, wall.minX), wall.maxX)
   const nearestY = Math.min(Math.max(point.y, wall.minY), wall.maxY)
   const offsetX = point.x - nearestX
