@@ -1,4 +1,4 @@
-# 3D Maze Game
+# Happy Birthday 3D Maze Game
 
 一個生日主題的 3D 迷宮遊戲:主角在迷宮裡依序收集拼出 HAPPY BIRTHDAY 的字母,打開門走出去。
 
