@@ -1,10 +1,11 @@
 // 奧客的佔位人形:用長方體拼成的低多邊形造型,動作由程式計算,不使用模型、動畫或圖片素材檔;爆炸星號的貼圖也在程式裡畫。
 // 它只負責看得出是一個人、看得出臉朝哪裡:往前凸出的尖嘴與挺在前面的肚子都在正面,從背後看不到。
-// 這裡只負責外觀、擺放、動作、被打中與倒地的樣子,以及擋在鏡頭前面時變半透明;
+// 這裡只負責外觀、擺放、動作、被打中與倒地的樣子、什麼時候冒出對話框,以及擋在鏡頭前面時變半透明;
 // 奧客在哪裡、朝哪裡、移動了多遠、處在哪個狀態,都由呼叫端依遊戲核心的快照告訴它。
 import { BoxGeometry, Group, MeshStandardMaterial, Sprite, SpriteMaterial } from 'three'
 
 import { createCanvasTexture, createRunCycle, part, placeFigure } from './lowPolyFigure.js'
+import { createSpeechBubble } from './speechBubble.js'
 
 // 鮮豔的襯衫在綠色的樹籬與草地前面才顯眼
 const SHIRT_COLOR = '#e8578a'
@@ -27,6 +28,8 @@ const ARM = { width: 0.24, length: 0.9, x: 0.77, y: 0.8, splay: 0.85 }
 // 頭是一個方塊,尖嘴從臉的正面往前凸出
 const HEAD = { size: 0.5, y: TORSO.height + 0.3 }
 const SNOUT = { width: 0.22, height: 0.18, depth: 0.3, y: -0.08 }
+// 對話框的尾巴尖端在畫面上離臉的中心多遠。它要大於頭的一半寬,尾巴才不會蓋到臉上
+const BUBBLE_GAP = HEAD.size / 2 + 0.12
 
 // 跑完一個完整步伐循環(左右腳各跨一次)前進的距離。奧客用走的,步伐比主角跑步時小
 const STRIDE_LENGTH = 1.8
@@ -64,15 +67,21 @@ const STAR_SPIKES = [1, 0.78, 0.93, 0.7, 0.98, 0.82]
  *
  * 每一位奧客各自建立一個,material 也各自一份,改一位的外觀不會改到另一位。
  *
- * 每一幀依序呼叫三個方法:
+ * 每一幀依序呼叫四個方法:
  * - `place(position, heading)`:position 是世界座標地面上的 `{ x, z }`,heading 是遊戲核心的朝向。
  * - `animate(distance, dt, state)`:distance 是這一幀在世界座標裡移動了多遠,dt 是經過幾秒,
  *   state 是遊戲核心快照裡這位奧客的狀態。
  *   - 有在移動就播走路動作,停下後很快回到站姿並保持靜止。
  *   - `'staggered'` 時上半身往後仰,狀態一變就回正。
  *   - `'down'` 時整個人往後倒、躺在地上;`'gone'` 時整個人藏起來。重生之後回到站姿。
+ * - `talk(dt, state, inSight)`:dt 是遊戲這一幀推進了幾秒,遊戲停住時傳 0;state 與 `animate` 的相同;
+ *   inSight 是鏡頭這一幀看不看得到這位奧客,也就是兩者之間沒有牆擋住。
+ *   - 奧客在 `'chasing'` 與 `'staggered'` 時,臉的右側輪播漫畫風的對話框,其餘狀態不顯示。
+ *   - 從其他狀態進入這兩個狀態的那一幀立刻冒出第一句,所以發現主角的那一刻就看得到對話框。
+ *   - 對話框畫在所有東西的前面,所以 inSight 為 false 時不畫,對話框才不會透過樹籬露出來。
  * - `fadeIfBlocking(cameraPosition, target, dt)`:cameraPosition 是鏡頭這一幀在世界座標的位置,
- *   target 是主角在世界座標地面上的 `{ x, z }`。奧客夾在鏡頭與主角之間、會遮住主角時漸漸變成半透明,離開之後漸漸恢復不透明。
+ *   target 是主角在世界座標地面上的 `{ x, z }`。奧客夾在鏡頭與主角之間、會遮住主角時,
+ *   連同對話框漸漸變成半透明,離開之後漸漸恢復不透明。
  *
  * `animate` 與 `fadeIfBlocking` 讀的是 `place` 擺好的位置,所以要在 `place` 之後呼叫。
  *
@@ -80,7 +89,7 @@ const STAR_SPIKES = [1, 0.78, 0.93, 0.7, 0.98, 0.82]
  * 奧客全身閃一下白,朝向主角的那一面冒出一個面向鏡頭的爆炸星號,很快消失。閃白與星號由之後每一幀的 `animate` 推進。
  * 第 3 下擊倒他的那一下也要呼叫。
  *
- * 只能在瀏覽器裡建立,因為爆炸星號的貼圖要用 canvas 畫。
+ * 只能在瀏覽器裡建立,因為爆炸星號與對話框的貼圖要用 canvas 畫。
  * 用完必須呼叫 `dispose()` 釋放 geometry、material 與貼圖。
  */
 export function createPassengerFigure() {
@@ -133,6 +142,9 @@ export function createPassengerFigure() {
     part(box, materials.fur, [0.15, 0.18, 0.06], [-0.2, HEAD.size / 2 + 0.06, 0]),
     part(box, materials.fur, [0.15, 0.18, 0.06], [0.2, HEAD.size / 2 + 0.06, 0]),
   )
+  // 對話框掛在頭的中心,跟著步伐起伏、硬直時跟著往後仰;奧客轉向時它不會跟著繞圈
+  const bubble = createSpeechBubble(BUBBLE_GAP)
+  head.add(bubble.object)
 
   // 髖關節以上的部位一起隨步伐起伏,硬直時一起往後仰
   const upperBody = new Group()
@@ -238,6 +250,9 @@ export function createPassengerFigure() {
       // 每跨一步身體起伏一次,所以用 |sin|
       upperBody.position.y = HIP_HEIGHT + Math.abs(Math.sin(phase)) * BOB_HEIGHT * blend
     },
+    talk(dt, state, inSight) {
+      bubble.update(dt, state === 'chasing' || state === 'staggered', inSight)
+    },
     fadeIfBlocking(cameraPosition, target, dt) {
       const goal = blocksView(body.position, cameraPosition, target) ? SEE_THROUGH_OPACITY : 1
       opacity += Math.sign(goal - opacity) * Math.min(Math.abs(goal - opacity), FADE_RATE * dt)
@@ -251,12 +266,14 @@ export function createPassengerFigure() {
         }
         material.opacity = opacity
       }
+      bubble.setOpacity(opacity)
     },
     dispose() {
       box.dispose()
       for (const material of Object.values(materials)) material.dispose()
       starMaterial.dispose()
       starTexture.dispose()
+      bubble.dispose()
     },
   }
 }
