@@ -16,7 +16,7 @@ import countdownWarningSoundUrl from './sounds/glass_001.ogg'
 import discoveredSoundUrl from './sounds/error_006.ogg'
 import doorOpenedSoundUrl from './sounds/jingles_PIZZI10.ogg'
 import knockDownSoundUrl from './sounds/impactPunch_heavy_000.ogg'
-import passengerHitSoundUrl from './sounds/impactPunch_medium_000.ogg'
+import passengerHitSoundUrl from './sounds/impactSoft_heavy_001.ogg'
 import swingSoundUrl from './sounds/impactPlate_heavy_001.ogg'
 import wrongSoundUrl from './sounds/question_004.ogg'
 

@@ -108,6 +108,6 @@ CC BY 3.0 的標註:
 | 門打開 | `jingles_PIZZI10.ogg` | Music Jingles(Pizzicato jingles) | https://kenney.nl/assets/music-jingles | CC0 |
 | 倒數的最後 30 秒,每過一秒 | `glass_001.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
 | 揮空時登機箱揮下去 | `impactPlate_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
-| 打中奧客(第 1、2 下) | `impactPunch_medium_000.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
+| 打中奧客(第 1、2 下) | `impactSoft_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
 | 擊倒奧客(第 3 下) | `impactPunch_heavy_000.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
 | 奧客發現主角 | `error_006.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
