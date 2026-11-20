@@ -26,7 +26,7 @@ help:
 	@echo "  make local                        Vite dev server、存檔後畫面立即更新、localhost:3000(前景執行;撞埠時 PORT 從 shell 換)"
 	@echo "  make local-down                   停止並清理 make local 的 container、network 與 anonymous volume,連同本專案的 <none> image(有名字的 image 留著)"
 	@echo "  make compose ARGS=\"...\"           對 make local 那組 container 下任何 compose 子命令(logs -f app、exec app sh …)"
-	@echo "  make test [ARGS=\"...\"]           Vitest,跑在 dev stage 容器裡(與 CI 同一套環境);ARGS 只跑一部分,例 ARGS=\"tests/game\" 或 ARGS=\"-t 死路\""
+	@echo "  make test [ARGS=\"...\"]           Vitest,跑在 dev stage 容器裡(與 CI 同一套環境);ARGS 只跑一部分,例 ARGS=\"tests/game\" 或 ARGS=\"-t 角落\""
 	@echo "  make lint | format                ESLint / Prettier(就地改檔)"
 	@echo "  make clean                        回收本專案的 container / volume / network 與 image"
 	@echo "  make clean-cache                  清掉這台機器上所有專案共用的 Docker build cache(會先問過)"

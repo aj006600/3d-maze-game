@@ -33,7 +33,7 @@ const RUN_SPEED = 1.25
  * - `start`:起點的格子 `{ col, row }`,是迷宮中央四格之一。
  * - `door`:門的位置 `{ col, row, side }`,也就是 `(col, row)` 這一格朝 `side` 那一側的外牆。
  * - `letters`:A 到 Z 各一個字母所在的格子 `{ letter, col, row }`,依字母順序排列。
- *   每個字母在不同的死路裡,起點與門所在的格子不放字母,多出來的死路也沒有字母。
+ *   每個字母在不同的角落裡,起點與門所在的格子不放字母,多出來的角落也沒有字母。
  *   字母被收集後仍留在原地,所以這份配置整局不變。
  * - `phrase`:通關字串去掉空格後的字母,依收集的順序排列。
  * - `progress`:已收集的字母數,從 0 開始,收集完時等於 `phrase` 的長度。
@@ -44,11 +44,11 @@ const RUN_SPEED = 1.25
  *   它只由 `step` 的 dt 扣除,不讀系統時鐘。歸零後停在 0,破關之後也停住不再減少。
  * - `failed`:是不是已經挑戰失敗。倒數歸零的那一步還沒破關,就挑戰失敗,之後一直是 true。
  *   同一步裡先判定破關,所以走出門的那一步剛好用完時間時算破關;破關之後也不會再變成挑戰失敗。
- * - `canInteract`:主角所在的格子是不是放著字母的死路。只看位置,與進度無關。
+ * - `canInteract`:主角所在的格子是不是放著字母的角落。只看位置,與進度無關。
  * - `interact()`:按下一次互動鍵,回傳這次互動的結果。挑戰失敗之後一律回傳 null,進度不變。
  *   - `'collected'`:主角所在的字母正是當下輪到的那一個,進度加一。字母留在原地,之後輪到時可以再收集。
  *   - `'wrong'`:主角所在的字母不是當下輪到的那一個,進度不變。全部收集完之後,每個字母都不是當下輪到的那一個。
- *   - `null`:主角不在有字母的死路格內,這次互動沒有任何效果。
+ *   - `null`:主角不在有字母的角落裡,這次互動沒有任何效果。
  * - `walls`:擋住主角的每一段牆,各是一個 `{ minX, maxX, minY, maxY }` 的長方形,單位是格。
  *   外牆在裡面。門鎖著時門那段外牆也在裡面,門打開後就不在了。
  *   每次讀取都是一份新的副本,改了它不會改到碰撞,門打開後也要重新讀取。
@@ -215,7 +215,7 @@ function pickStart(random) {
   return { col: random.pick(middle), row: random.pick(middle) }
 }
 
-// 外牆四面各有 MAZE_SIZE 段,每段被選中的機會相同;角落的格子有兩段外牆
+// 外牆四面各有 MAZE_SIZE 段,每段被選中的機會相同;迷宮四個角上的格子有兩段外牆
 function pickDoor(random) {
   const last = MAZE_SIZE - 1
   const segments = []
@@ -232,9 +232,9 @@ function pickDoor(random) {
 
 // 起點與門所在的格子不放字母:
 // - 起點放了字母的話,主角一開局就站在字母底下。
-// - 門打開後,門所在的那一格有兩個開口,就不再是死路。
+// - 門打開後,門所在的那一格有兩個開口,就不再是角落。
 function generateLayout(random) {
-  // 能放字母的死路不足 26 個時,用同一個產生器接著重新產生一局。
+  // 能放字母的角落不足 26 個時,用同一個產生器接著重新產生一局。
   // 產生器的數列由 seed 決定,所以重來幾次、最後是哪一局都是固定的
   for (;;) {
     const maze = generateMaze(MAZE_SIZE, random)
@@ -250,7 +250,7 @@ function placeLetters(random, candidates) {
   return [...LETTERS].map((letter, i) => ({ letter, ...shuffled[i] }))
 }
 
-// 字母都在死路裡,所以主角所在的格子有字母,就等於主角站在有字母的死路裡
+// 字母都在角落裡,所以主角所在的格子有字母,就等於主角站在有字母的角落裡
 function letterAt(letters, position) {
   const cell = cellOf(position)
   return letters.find((placed) => isSameCell(placed, cell))

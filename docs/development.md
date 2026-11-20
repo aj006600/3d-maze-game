@@ -10,7 +10,7 @@ make local-down  # 停止並清理:container、network、anonymous volume,以及
 ```
 
 打開 http://localhost:3000,首頁先顯示入口畫面的禮物盒,點一下進到開始畫面,音樂也從這一下開始播;
-選好時限後按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,站進有字母的死路按 F 收集,按滑鼠左鍵或空白鍵揮擊登機箱,打中擋路的奧客 3 次就擊倒他,
+選好時限後按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,站進有字母的角落按 F 收集,按滑鼠左鍵或空白鍵揮擊登機箱,打中擋路的奧客 3 次就擊倒他,
 集滿 13 個字母門就打開,走出門看到破關畫面;有時限的一局倒數歸零時還沒走出門,就看到失敗畫面。
 Esc 暫停,在暫停畫面按「繼續」接著玩或回到開始畫面,M 切換靜音。
 
@@ -35,7 +35,7 @@ PORT=3001 make local
 ```bash
 make test                     # 完整套 Vitest,跟 CI 一樣
 make test ARGS="tests/game"   # 只跑路徑符合的測試檔
-make test ARGS="-t 死路"      # 只跑名字符合的測試
+make test ARGS="-t 角落"      # 只跑名字符合的測試
 make lint                     # ESLint(recommended 加 react-hooks)
 make format                   # Prettier(就地改檔)
 ```
