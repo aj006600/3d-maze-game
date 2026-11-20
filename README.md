@@ -55,8 +55,6 @@ CC BY 3.0 的標註:
 
 ### Sound Effects
 
-八個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
-
 | 時機 | 檔案 | 音效包 | 來源 | 授權 |
 |------|------|--------|------|------|
 | 收集成功 | `confirmation_001.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
