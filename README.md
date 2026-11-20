@@ -31,11 +31,11 @@ make help    # 其餘指令
 
 ### Music
 
-| 畫面 | 曲名 | 作者 | 來源 | 授權 |
-|------|------|------|------|------|
-| 開始畫面、失敗畫面 | Pleasant Creek(循環版) | Matthew Pablo | https://opengameart.org/content/pleasant-creek | CC BY 3.0 |
-| 遊戲中、暫停畫面 | Flowerbed Fields [Loop] | Zane Little Music | https://opengameart.org/content/flowerbed-fields-loop | CC0 |
-| 破關畫面 | Happy Birthday Music Box | Percy Duke | https://freesound.org/people/Percy%20Duke/sounds/23270/ | CC BY 3.0 |
+| 畫面 | 曲名 | 作者 | 授權 |
+|------|------|------|------|
+| 開始畫面、失敗畫面 | [Pleasant Creek](https://opengameart.org/content/pleasant-creek)(循環版) | Matthew Pablo | CC BY 3.0 |
+| 遊戲中、暫停畫面 | [Flowerbed Fields \[Loop\]](https://opengameart.org/content/flowerbed-fields-loop) | Zane Little Music | CC0 |
+| 破關畫面 | [Happy Birthday Music Box](https://freesound.org/people/Percy%20Duke/sounds/23270/) | Percy Duke | CC BY 3.0 |
 
 CC BY 3.0 的標註:
 
@@ -55,13 +55,13 @@ CC BY 3.0 的標註:
 
 ### Sound Effects
 
-| 時機 | 檔案 | 音效包 | 來源 | 授權 |
-|------|------|--------|------|------|
-| 收集成功 | `confirmation_001.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
-| 按錯字母 | `question_004.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
-| 門打開 | `jingles_PIZZI10.ogg` | Music Jingles(Pizzicato jingles) | https://kenney.nl/assets/music-jingles | CC0 |
-| 倒數的最後 30 秒,每過一秒 | `glass_001.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
-| 揮空時登機箱揮下去 | `impactPlate_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
-| 打中老鼠(第 1、2 下) | `impactSoft_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
-| 擊倒老鼠(第 3 下) | `impactPunch_heavy_000.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
-| 老鼠發現主角 | `error_006.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
+| 時機 | 檔案 | 音效包 | 授權 |
+|------|------|--------|------|
+| 收集成功 | `confirmation_001.ogg` | [Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| 按錯字母 | `question_004.ogg` | [Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| 門打開 | `jingles_PIZZI10.ogg` | [Music Jingles](https://kenney.nl/assets/music-jingles) | CC0 |
+| 倒數最後 30 秒的每一秒 | `glass_001.ogg` | [Interface Sounds](https://opengameart.org/content/interface-sounds) | CC0 |
+| 揮空時登機箱揮下去 | `impactPlate_heavy_001.ogg` | [Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| 打中老鼠(第 1、2 下) | `impactSoft_heavy_001.ogg` | [Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| 擊倒老鼠(第 3 下) | `impactPunch_heavy_000.ogg` | [Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| 老鼠發現主角 | `error_006.ogg` | [Interface Sounds](https://opengameart.org/content/interface-sounds) | CC0 |
