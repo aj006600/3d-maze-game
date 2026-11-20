@@ -21,9 +21,11 @@ const MAX_FRAME_SECONDS = 0.1
  * 填滿父元素的遊戲畫布。游標鎖在畫布上時,用 WASD 跑、滑鼠轉向與調整俯仰角,按 F 互動,按滑鼠左鍵或空白鍵揮擊。
  * 收集成功時,被收集的字母、主角與狗會在畫布上播收集的回饋。主角揮擊的動作跟著遊戲核心的揮擊進度播。
  * 奧客被打中時閃白、往後仰並冒出爆炸星號,被擊倒時往後倒在地上;奧客擋在鏡頭與主角之間時變成半透明。
+ * 奧客從發現主角起,在追趕與硬直期間輪播對話框。
  *
  * 遊戲只在 `active` 為 true、而且游標鎖在畫布上時推進。其餘時候畫面照常繪製,但遊戲停住:
  * - 主角停在原地,朝向不變。揮到一半的揮擊停在那裡,遊戲再推進時接著揮。
+ * - 對話框的輪播停住:正在顯示的那一句一直顯示,正在隱藏的一直隱藏,遊戲再推進時接著輪播。
  * - 按 F 與揮擊鍵沒有效果。這段時間按下的會被丟掉,遊戲再推進時不會補算。
  * - 游標被放開之前按下、還沒處理到的 F 與揮擊鍵也會被丟掉。
  *
@@ -156,7 +158,8 @@ const GameCanvas = forwardRef(function GameCanvas(
       const before = game.player
       const passengersBefore = game.passengers
       const { pitch, interactions, swings, ...input } = controls.read()
-      if (activeRef.current && controls.isLocked()) {
+      const advancing = activeRef.current && controls.isLocked()
+      if (advancing) {
         game.step({ ...input, dt })
         // 互動在移動之後處理,判斷的是主角這一幀跑完之後所在的格子
         for (let i = 0; i < interactions; i += 1) {
@@ -202,9 +205,12 @@ const GameCanvas = forwardRef(function GameCanvas(
       dogFigure.place(dogPose.position, dogPose.heading)
       dogFigure.animate(dogPose.distance, dt)
       passengers.forEach((passenger, i) => {
-        passengerFigures[i].place(toWorld(game.maze, passenger), passenger.heading)
+        const passengerPosition = toWorld(game.maze, passenger)
+        passengerFigures[i].place(passengerPosition, passenger.heading)
         if (wasHit(passengersBefore[i], passenger)) passengerFigures[i].hit(position)
         passengerFigures[i].animate(travelledBetween(passengersBefore[i], passenger), dt, passenger.state)
+        // 對話框的輪播跟著遊戲推進的秒數走,遊戲停住時才會停在原地
+        passengerFigures[i].talk(advancing ? dt : 0, passenger.state, followCamera.sees(passengerPosition))
         passengerFigures[i].fadeIfBlocking(camera.position, position, dt)
       })
       letterFigures.animate(time / 1000, camera.position)
