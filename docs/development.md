@@ -6,7 +6,7 @@
 
 ```bash
 make local       # Vite dev server(前景執行,Ctrl+C 停止)
-make local-down  # 停止並清理 container、network 與 volume
+make local-down  # 停止並清理:container、network、anonymous volume,以及不會再用到的舊 image
 ```
 
 打開 http://localhost:3000,首頁先顯示入口畫面的禮物盒,點一下進到開始畫面,音樂也從這一下開始播;
@@ -83,31 +83,49 @@ make compose ARGS="exec app sh"      # 進容器
 
 ## Cleanup
 
-磁碟被 Docker 吃滿時,回收這個專案佔掉的空間:
+Docker 留在機器上的東西分三層收,每一層動到的範圍不同:
+
+| 指令 | 清什麼 | 範圍 |
+|------|--------|------|
+| `make local-down` | `make local` 的 container 與 network、裝 `node_modules` 的 anonymous volume、沒名字的舊 image(`<none>`) | 只有本專案 |
+| `make clean` | 上面那些,加上有名字的 image | 只有本專案 |
+| `make clean-cache` | Docker build cache | **整台機器的所有專案**,會先問過 |
 
 ```bash
-make clean     # make local 的 container / volume / network + 本專案的 image + 沒人在用的 build cache
+make local-down    # 日常收工
+make clean         # 把本專案佔的空間還回去
+make clean-cache   # 磁碟還是不夠時,接在 make clean 之後跑
 ```
 
-**堆積來源**:
+**`make local-down` 留下什麼**:有名字的 image 與 build cache,下次 `make local` 會直接重用,起得快。
 
-| 堆積物 | 怎麼來的 |
-|--------|---------|
-| build cache | build 的中間結果(`npm ci` 裝好的套件)存起來讓下次快,通常是最大宗 |
-| 沒名字的舊 image | 重 build 同一個 tag,新 image 拿走名字,舊的變成 `<none>` 卻沒被刪 |
-| 沒 down 的 container | `make local` 按 Ctrl+C 只是停下來,container、network 與裝 `node_modules` 的 volume 都還在 |
+**它清掉的是不會再被用到的東西**:
+
+| 東西 | 怎麼來的 |
+|------|---------|
+| 沒名字的舊 image | 重 build 同一個 tag,新 image 拿走名字,舊的變成 `<none>` 卻沒被刪。原始碼烤在 image 裡,所以改一次程式再跑 `make test` 就多一顆 |
+| anonymous volume | 裝 `node_modules` 的那個 volume 沒有名字。container 刪掉後它還在,下次 `make local` 卻另建一個新的 |
+| 沒 down 的 container | `make local` 按 Ctrl+C 只是停下來,container 與 network 都還在 |
+| 改名前的 container | compose 檔裡把服務改名或拿掉,舊 container 還掛在同一個 project 名下 |
+
+沒名字的舊 image 不必等到收工:`make local`、`make test`、`make lint`、`make format` 每次都會順手清。
+`make local` 還在跑的時候跑 `make test`,被取代的那顆 image 仍有 container 在用,會留到下一次 `make local` 或 `make local-down` 才清。
 
 **怎麼認出這個專案的東西**:`Dockerfile` 裡有專案 label(`org.opencontainers.image.title`),
-build 出來的每顆 image 都帶著它,連重 build 後沒名字(`<none>`)的舊 image 也是。`make clean` 只刪帶這個 label 的,
+build 出來的每顆 image 都帶著它,連重 build 後沒名字(`<none>`)的舊 image 也是。清 image 的指令只刪帶這個 label 的,
 不比對 image 名字——`shop` 與 `shop-admin` 這種名字相近的專案才不會互刪。
 
-**build cache 沒有 label**,沒辦法按專案挑。`make clean` 先把本專案的 image 全刪掉,它的 cache 就變成沒人在用,
-最後一步 `docker builder prune` 把沒人在用的 cache 丟掉。別的專案同樣沒人在用的 cache 也會一起丟——
-它們下次 build 慢一點,不會壞——這是 `make clean` 唯一不限於本專案的地方。
+**build cache 沒有 label**,沒辦法按專案挑,所以獨立成 `make clean-cache`。它清掉整台機器上沒有 image 在用的 cache:
+先跑 `make clean` 把本專案的 image 刪掉,本專案的 cache 才會落在這個範圍內。別的專案同樣沒有 image 在用的 cache
+也會一起清掉——它們下次 build 要重新下載套件,慢幾分鐘,不會壞。build cache 通常是最佔空間的一塊,磁碟告警時才需要動它。
 
-**什麼時候跑**:磁碟告警的時候,或改完 `Dockerfile` / `package-lock.json` 想確認從乾淨狀態 build 得起來。
-日常收工用 `make local-down` 就好——它只收 container、network 與 volume,留 image,下次 `make local` 才起得快;
-`make clean` 之後的第一次 `make local` 要從頭 build,會等好幾分鐘。
+`make clean` 之後的第一次 `make local` 要重新 build image。
+
+**想確認從乾淨狀態 build 得起來**(改完 `Dockerfile` / `package-lock.json` 之後)不必清任何東西,叫這一次 build 不用 cache 就好:
+
+```bash
+make compose ARGS="build --no-cache"
+```
 
 ## Parallel Development (worktree)
 
@@ -129,7 +147,8 @@ cd - && make worktree-rm ISSUE=12          # 收工:有未 commit 或未 push �
 branch 從 `origin/main` 開且不追蹤它(`--no-track`),不帶參數的 `git push` 不會推進 main;第一次 push 寫明
 `git push -u origin <branch>`。origin 上已有同名 branch 時,`make worktree` 接著它開。
 
-`make worktree-rm` 連該 worktree 的 container、network 與 volume 一起收。它只檢查程式碼有沒有 commit 與 push,
+`make worktree-rm` 連該 worktree 的 container、network、volume 與它 build 的 image 一起收。它只檢查程式碼有沒有 commit 與 push,
 volume 裡的資料會直接刪掉:要留的資料在主 checkout 跑。
 
 `make clean` 以專案 label 清 image,會連其他 worktree build 的一起清;正在跑的刪不掉,會停在那一步。
+沒名字的舊 image 也是以專案 label 認,任何一個 checkout 清的時候,其他 worktree 留下的會一起清掉。
