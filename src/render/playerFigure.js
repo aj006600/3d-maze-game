@@ -19,7 +19,7 @@ import {
 } from 'three'
 
 import { createFeedbackClip, easeInOut, hopOf } from './collectFeedback.js'
-import { createCanvasTexture, createRunCycle, part, placeFigure } from './lowPolyFigure.js'
+import { createCanvasTexture, createRunCycle, part, placeFigure, taperedBox } from './lowPolyFigure.js'
 import { createSuitcaseFigure } from './suitcaseFigure.js'
 import { paintTigerStripes, TIGER_ORANGE, TIGER_TILE_SIZE } from './tigerStripes.js'
 
@@ -641,24 +641,6 @@ function createBow(box, materials) {
     bow.add(tail)
   }
   return bow
-}
-
-/**
- * 上下兩個面大小不同的長方體,原點在中心。
- *
- * bottom 與 top 都是 `[寬, 深]`,分別是 x 與 z 方向的長度。四個側面仍然是平面,低多邊形的稜角才會一致。
- */
-function taperedBox(height, [bottomWidth, bottomDepth], [topWidth, topDepth]) {
-  const geometry = new BoxGeometry(1, height, 1)
-  const position = geometry.attributes.position
-  for (let i = 0; i < position.count; i += 1) {
-    const [width, depth] = position.getY(i) > 0 ? [topWidth, topDepth] : [bottomWidth, bottomDepth]
-    position.setX(i, position.getX(i) * width)
-    position.setZ(i, position.getZ(i) * depth)
-  }
-  // 側面斜了,原本的法向量不再垂直於側面,光影會不對
-  geometry.computeVertexNormals()
-  return geometry
 }
 
 // 腰帶與蝴蝶結的橘底黑紋虎紋貼圖。貼在長方體的每一面上時,紋路都沿著貼圖的上下方向
