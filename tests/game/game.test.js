@@ -1,9 +1,10 @@
 // 遊戲核心公開介面的行為測試:一局遊戲的迷宮、起點、門與字母,主角的移動與碰撞,
-// 依通關字串收集字母,開門與破關,時限與挑戰失敗,揮擊,測試用的傳送 hook,以及奧客的出現、遊蕩、發現、追趕、碰撞與擋路。
+// 依通關字串收集字母,開門與破關,時限與挑戰失敗,揮擊,測試用的傳送 hook,以及奧客的出現、遊蕩、發現、追趕、碰撞與擋路,
+// 被揮擊打中、擊倒與重生。
 // 只透過 createGame 與它回傳的物件讀狀態,不碰核心內部的資料結構或演算法步驟。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { PASSENGERS, SWING_SECONDS, TIME_LIMITS } from '../../src/config.js'
+import { PASSENGERS, SWING_HIT, SWING_SECONDS, SWING_STRIKE, TIME_LIMITS } from '../../src/config.js'
 import { createGame } from '../../src/game/game.js'
 
 // 測試對方向的理解直接取自公開介面的契約(row 往南遞增、col 往東遞增),不沿用核心內部的對照表
@@ -992,6 +993,12 @@ const facingSideOf = ({ heading }) =>
 const aheadAlong = (direction, origin, point) =>
   (point.x - origin.x) * direction.col + (point.y - origin.y) * direction.row
 
+// 走動中的奧客朝著正要走進的那一格。沿著他面向的那一側量,他走出所在那一格的中央多遠
+function progressOf(passenger) {
+  const cell = cellOf(passenger)
+  return aheadAlong(OFFSETS[facingSideOf(passenger)], { x: cell.col + 0.5, y: cell.row + 0.5 }, passenger)
+}
+
 // 從 cell 往 side 那一側直直走 length 格到達的格子;途中有一側沒有通道時是 null
 function straightFrom(maze, cell, side, length) {
   let current = cell
@@ -1243,12 +1250,10 @@ function meetFirstPassenger(game) {
   for (let i = 0; i < 60 / FRAME; i += 1) {
     run(game, {}, FRAME)
     const [passenger] = game.passengers
-    // 走動中的奧客朝著正要走進的那一格
-    const direction = OFFSETS[facingSideOf(passenger)]
-    const from = cellOf(passenger)
-    const progress = aheadAlong(direction, { x: from.col + 0.5, y: from.row + 0.5 }, passenger)
+    const progress = progressOf(passenger)
     if (progress > 0 && progress < 0.25) {
-      const cell = stepOf(from, sideOf(direction))
+      const direction = OFFSETS[facingSideOf(passenger)]
+      const cell = stepOf(cellOf(passenger), sideOf(direction))
       game.teleport(cell)
       // 奧客離主角還有大半格,走過來不到兩秒
       run(game, {}, 2)
@@ -1433,6 +1438,262 @@ describe('奧客的碰撞與擋路', () => {
     }
     // 至少要有一次兩位碰在一起,這條規則才有被考驗到
     expect(closest).toBeLessThan(2 * PASSENGERS.radius + 0.01)
+  })
+})
+
+// 找一個兩位追趕的奧客會從互相垂直的兩側走進來的格子,兩位都要離那一格至少兩格遠。
+// 迷宮裡通往主角的路只有一條,所以奧客從哪一側走進那一格,看那一側隔壁的格子是不是離奧客更近一步就知道。
+// 回傳那一格與兩位奧客各自從哪一側走進來;找不到時回傳 null
+function surroundedCornerOf(game) {
+  const distances = game.passengers.map((passenger) => pathDistancesFrom(game.maze, cellOf(passenger)))
+  for (const cell of cellsOf(game.maze)) {
+    if (distances.some((fromPassenger) => fromPassenger.get(keyOf(cell)) < 2)) continue
+    const entrances = distances.map((fromPassenger) =>
+      game.maze
+        .openings(cell)
+        .find((side) => fromPassenger.get(keyOf(stepOf(cell, side))) === fromPassenger.get(keyOf(cell)) - 1),
+    )
+    if (CLOCKWISE[entrances[0]] === entrances[1] || CLOCKWISE[entrances[1]] === entrances[0]) return { cell, entrances }
+  }
+  return null
+}
+
+// 從 from 到 to 的線段有沒有穿過 walls 裡的某一段牆。沿著線段每隔 0.01 格取一個點,比牆的厚度密得多
+function crossesWall(walls, from, to) {
+  const samples = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 0.01)
+  for (let i = 0; i <= samples; i += 1) {
+    const point = { x: from.x + ((to.x - from.x) * i) / samples, y: from.y + ((to.y - from.y) * i) / samples }
+    if (isCovered(walls, point)) return true
+  }
+  return false
+}
+
+// 揮擊開始之後推進到這麼多秒時,揮擊打中奧客
+const STRIKE_SECONDS = SWING_STRIKE * SWING_SECONDS
+
+// 面向 heading 從頭揮擊一次,站著推進到揮完為止
+function swingOnce(game, heading) {
+  game.swing()
+  run(game, { heading }, SWING_SECONDS + FRAME)
+}
+
+// 面向 heading 從頭揮擊一次,站著推進到揮到一半、打中奧客的那一步為止。揮擊還沒揮完
+function swingToStrike(game, heading) {
+  game.swing()
+  while (game.swingProgress !== null && game.swingProgress < SWING_STRIKE) run(game, { heading }, FRAME)
+}
+
+// 面向 heading 連續揮擊,推進到擊倒面前那位奧客的那一步為止。奧客要在每一次揮擊都打得到的地方
+function knockDown(game, heading) {
+  for (let i = 1; i < PASSENGERS.knockDownHits; i += 1) swingOnce(game, heading)
+  swingToStrike(game, heading)
+}
+
+describe('奧客被打中、擊倒與重生', () => {
+  const COMBAT_SEEDS = SEEDS.slice(0, 10)
+
+  it('面向奧客、在範圍內揮擊,揮到一半的那一刻他被打中的次數加一', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      game.swing()
+      run(game, { heading: HEADINGS[facing] }, STRIKE_SECONDS * 0.9, STRIKE_SECONDS * 0.9)
+      expect(game.passengers[0].hits, `seed ${seed} 揮到一半之前`).toBe(0)
+      run(game, { heading: HEADINGS[facing] }, STRIKE_SECONDS * 0.2, STRIKE_SECONDS * 0.2)
+      expect(game.passengers[0].hits, `seed ${seed}`).toBe(1)
+    }
+  })
+
+  it('奧客偏離主角的正前方在命中的角度以內時打得中,超過就打不中;在主角背後也打不中', () => {
+    const { halfAngle } = SWING_HIT
+    // 主角的朝向從正對著奧客往右或往左偏多少,以及偏了之後打不打得中
+    const cases = [
+      { offset: halfAngle - 0.1, hit: true },
+      { offset: -(halfAngle - 0.1), hit: true },
+      { offset: halfAngle + 0.1, hit: false },
+      { offset: -(halfAngle + 0.1), hit: false },
+      { offset: Math.PI, hit: false },
+    ]
+    for (const seed of COMBAT_SEEDS) {
+      for (const { offset, hit } of cases) {
+        const game = createGame(seed, { allowTeleport: true })
+        const { facing } = meetFirstPassenger(game)
+        swingOnce(game, HEADINGS[facing] + offset)
+        expect(game.passengers[0].hits, `seed ${seed} 偏 ${offset.toFixed(2)}`).toBe(hit ? 1 : 0)
+      }
+    }
+  })
+
+  it('奧客在主角正前方但離得太遠時,揮擊打不中', () => {
+    let tested = 0
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      // 主角站在同一條直線走道上 2 格遠的那一格,面向奧客立刻揮擊。奧客這時發現主角、追過來,但揮到一半時還沒追到
+      const from = cellOf(game.passengers[0])
+      const side = Object.keys(OFFSETS).find((side) => straightFrom(game.maze, from, side, 2) !== null)
+      if (side === undefined) continue
+      tested += 1
+      game.teleport(straightFrom(game.maze, from, side, 2))
+      swingOnce(game, HEADINGS[OPPOSITE[side]])
+      expect(game.passengers[0].hits, `seed ${seed}`).toBe(0)
+    }
+    expect(tested).toBeGreaterThan(0)
+  })
+
+  it('兩位奧客從互相垂直的兩條走道圍住岔路上的主角時,主角面向兩人之間揮擊,一次打中兩位', () => {
+    let tested = 0
+    for (const seed of SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      for (let i = 0; i < PASSENGERS.count; i += 1) discoverPlayer(game, i)
+      const corner = surroundedCornerOf(game)
+      if (corner === null) continue
+      tested += 1
+      game.teleport(corner.cell)
+      run(game, {}, 30)
+      // 兩位奧客走進來的兩側互相垂直,兩側的中間就是主角面向兩人之間的方向
+      const [first, second] = corner.entrances.map((side) => OFFSETS[side])
+      swingOnce(game, Math.atan2(first.col + second.col, -(first.row + second.row)))
+      expect(
+        game.passengers.map(({ hits }) => hits),
+        `seed ${seed} ${keyOf(corner.cell)}`,
+      ).toEqual([1, 1])
+      if (tested === 10) break
+    }
+    expect(tested).toBeGreaterThan(5)
+  })
+
+  it('被打中的奧客硬直期間停在原地,不會被打退;硬直結束後繼續追趕', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      const [before] = game.passengers
+      swingToStrike(game, HEADINGS[facing])
+      const label = `seed ${seed}`
+      expect(game.passengers[0], label).toMatchObject({ x: before.x, y: before.y, state: 'staggered' })
+      // 主角面向奧客往後退開。硬直中的奧客不跟上來,硬直結束後才追過來
+      run(game, { forward: -1, heading: HEADINGS[facing] }, PASSENGERS.staggerSeconds * 0.9)
+      expect(game.passengers[0], `${label} 硬直中`).toMatchObject({ x: before.x, y: before.y, state: 'staggered' })
+      run(game, {}, PASSENGERS.staggerSeconds * 0.2)
+      expect(game.passengers[0].state, `${label} 硬直結束`).toBe('chasing')
+      const recovered = game.passengers[0]
+      run(game, {}, 0.2)
+      expect(movementOf(recovered, game.passengers[0]).distance, `${label} 硬直結束後`).toBeGreaterThan(0)
+    }
+  })
+
+  it('還在遊蕩的奧客同樣打得中,硬直結束後就追趕主角', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = hidePlayer(createGame(seed, { allowTeleport: true }))
+      // 等遊蕩的奧客走出一格的中央一小段,還在這一格裡;主角傳送到這一格的中央,奧客就在主角正前方、打得到的地方
+      let passenger = game.passengers[0]
+      for (let i = 0; i < 60 / FRAME && !(progressOf(passenger) > 0.2 && progressOf(passenger) < 0.45); i += 1) {
+        run(game, {}, FRAME)
+        passenger = game.passengers[0]
+      }
+      expect(passenger.state, `seed ${seed}`).toBe('wandering')
+      game.teleport(cellOf(passenger))
+      // 揮擊與傳送之後只推進一步,這一步就揮到一半。奧客在這一步打中之前還來不及發現主角
+      game.swing()
+      run(game, { heading: HEADINGS[facingSideOf(passenger)] }, STRIKE_SECONDS, STRIKE_SECONDS)
+      expect(game.passengers[0], `seed ${seed}`).toMatchObject({ hits: 1, state: 'staggered' })
+      run(game, {}, PASSENGERS.staggerSeconds)
+      expect(game.passengers[0].state, `seed ${seed}`).toBe('chasing')
+    }
+  })
+
+  it('硬直中的奧客仍然擋路,主角朝他跑時被擋住', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { direction, facing } = meetFirstPassenger(game)
+      swingToStrike(game, HEADINGS[facing])
+      const [passenger] = game.passengers
+      run(game, { forward: 1, heading: HEADINGS[facing] }, PASSENGERS.staggerSeconds * 0.9)
+      expect(game.passengers[0].state, `seed ${seed}`).toBe('staggered')
+      // 沿著奧客走過來的方向量,主角還在奧客的前方,沒有穿過他
+      expect(aheadAlong(direction, passenger, game.player), `seed ${seed}`).toBeGreaterThan(0)
+    }
+  })
+
+  it('第 3 次被打中的那一刻奧客倒地,主角可以立刻從他身上穿過去', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { direction, facing } = meetFirstPassenger(game)
+      swingOnce(game, HEADINGS[facing])
+      swingOnce(game, HEADINGS[facing])
+      expect(game.passengers[0].state, `seed ${seed} 打中兩次`).not.toBe('down')
+      swingToStrike(game, HEADINGS[facing])
+      const [passenger] = game.passengers
+      expect(passenger, `seed ${seed}`).toMatchObject({ hits: 3, state: 'down' })
+      // 奧客從那一側走過來,所以那一側有通道。主角朝奧客跑一格,跑得到奧客的後方
+      run(game, { forward: 1, heading: HEADINGS[facing] }, 1 / RUN_SPEED)
+      expect(aheadAlong(direction, passenger, game.player), `seed ${seed}`).toBeLessThan(0)
+    }
+  })
+
+  it('打中的次數不隨時間減少:打中兩次之後隔一段時間再打中一次,仍然擊倒', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      swingOnce(game, HEADINGS[facing])
+      swingOnce(game, HEADINGS[facing])
+      // 主角站著不動,奧客硬直結束後又貼回主角面前
+      run(game, {}, 60)
+      expect(game.passengers[0].hits, `seed ${seed} 隔了一分鐘`).toBe(2)
+      swingToStrike(game, HEADINGS[facing])
+      expect(game.passengers[0].state, `seed ${seed}`).toBe('down')
+    }
+  })
+
+  it('倒地與消失之後還沒重生的奧客,都不會再被打中', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      knockDown(game, HEADINGS[facing])
+      // 揮完擊倒他的這一下,馬上再揮一次,揮到一半時奧客還躺在原地
+      run(game, { heading: HEADINGS[facing] }, SWING_SECONDS / 2 + FRAME)
+      swingToStrike(game, HEADINGS[facing])
+      expect(game.passengers[0], `seed ${seed} 倒地`).toMatchObject({ hits: PASSENGERS.knockDownHits, state: 'down' })
+      // 等他消失之後,朝他剛才躺著的地方再揮一次
+      run(game, {}, PASSENGERS.downSeconds)
+      swingToStrike(game, HEADINGS[facing])
+      expect(game.passengers[0], `seed ${seed} 消失`).toMatchObject({ hits: PASSENGERS.knockDownHits, state: 'gone' })
+    }
+  })
+
+  it('倒地的奧客停一下就從迷宮裡消失', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      knockDown(game, HEADINGS[facing])
+      run(game, {}, PASSENGERS.downSeconds * 0.9)
+      expect(game.passengers[0].state, `seed ${seed} 倒地中`).toBe('down')
+      run(game, {}, PASSENGERS.downSeconds * 0.2)
+      expect(game.passengers[0].state, `seed ${seed}`).toBe('gone')
+    }
+  })
+
+  it('倒地之後過了重生的秒數,奧客在離主角夠遠、主角看不到、沒有另一位奧客的格子中央重生,回到遊蕩,次數歸零', () => {
+    for (const seed of COMBAT_SEEDS) {
+      const game = createGame(seed, { allowTeleport: true })
+      const { facing } = meetFirstPassenger(game)
+      knockDown(game, HEADINGS[facing])
+      // 主角站著不動,一步一步推進到奧客重生的那一步
+      let seconds = 0
+      while (game.passengers[0].state !== 'wandering' && seconds < 2 * PASSENGERS.respawnSeconds) {
+        run(game, {}, FRAME)
+        seconds += FRAME
+      }
+      const [passenger, other] = game.passengers
+      const cell = cellOf(passenger)
+      const center = { x: cell.col + 0.5, y: cell.row + 0.5 }
+      const label = `seed ${seed} ${keyOf(cell)}`
+      expect(seconds, label).toBeCloseTo(PASSENGERS.respawnSeconds, 1)
+      expect(passenger, label).toMatchObject({ ...center, hits: 0 })
+      const distances = pathDistancesFrom(game.maze, cellOf(game.player))
+      expect(distances.get(keyOf(cell)), label).toBeGreaterThanOrEqual(PASSENGERS.minRespawnDistance)
+      expect(crossesWall(game.walls, game.player, center), label).toBe(true)
+      expect(keyOf(cellOf(other)), label).not.toBe(keyOf(cell))
+    }
   })
 })
 
