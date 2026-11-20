@@ -9,7 +9,7 @@ export const SEED = 20261118
 export const PHRASE = 'HAPPY BIRTHDAY'
 
 /** 破關畫面上的祝福文字,照這裡的寫法顯示。 */
-export const BLESSING = '祝你生日快樂,新的一歲天天開心!(這段是佔位文字,之後會換成真正的祝福。)'
+export const BLESSING = '祝你生日快樂！希望新的一年都可以身體健康、天天開心，愛你喔，啾咪~ >/////<'
 
 /**
  * 開始畫面上可以選的時限,單位是秒,照畫面上由左到右的順序排列。null 是不限時。
