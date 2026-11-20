@@ -4,12 +4,13 @@
 
 | 指令 | 用途 |
 |---|---|
-| `make local` / `make local-down` | 起本機環境(Vite dev server,存檔後畫面立即更新,localhost:3000;撞埠時從 shell 換 `PORT`)/ 停止並清理 |
+| `make local` / `make local-down` | 起本機環境(Vite dev server,存檔後畫面立即更新,localhost:3000;撞埠時從 shell 換 `PORT`)/ 停止並清理:container、network、anonymous volume 與本專案的 `<none>` image(有名字的 image 留著) |
 | `make test`(只跑一部分:`make test ARGS="tests/game"`) | 跑測試(Vitest),在 dev stage 容器裡(與 CI 同一個 stage) |
 | `make lint` / `make format` | lint(ESLint)/ format(Prettier) |
 | `make worktree ISSUE=<n> BRANCH=<feat/slug>` / `make worktree-rm ISSUE=<n>` | 開 / 收一個 issue 的 worktree(從主 checkout 跑,流程見 Development workflow) |
 | `make compose ARGS="..."` | 對 `make local` 那組 container 下 compose 子命令(`logs -f app`、`exec app sh`)。它帶著與 `make local` 同一個 image tag;直接打 `docker compose` 會 build 出另一顆 image |
-| `make clean` | 回收本專案的 container / volume / network、image 與 build cache,範圍以專案 label 劃定,不動到別的專案 |
+| `make clean` | 回收本專案的 container / volume / network 與 image,範圍以 compose project 與專案 label 劃定,不動到別的專案 |
+| `make clean-cache` | 清掉整台機器所有專案共用的 Docker build cache。會先問 y/N,要我本人回答才清,不要代答 |
 
 其餘指令:`make help`(`make ps`)。
 
