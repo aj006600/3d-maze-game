@@ -1128,7 +1128,8 @@ describe('奧客的追趕', () => {
       // 主角站在同一條直線走道上、發現得到的地方,所以兩者之間的直線距離就是沿著走道的距離
       game.teleport(straightFrom(game.maze, from, side, DISCOVER_CELLS))
       const { player } = game
-      const frames = trackPassengers(game, {}, 3)
+      // 追蹤的時間跟著發現的距離走,多留一秒,奧客才一定追得到主角面前
+      const frames = trackPassengers(game, {}, DISCOVER_CELLS / CHASE_SPEED + 1)
       // 這裡只看第一位奧客怎麼追主角:另一位奧客走進這條走道擋到他的話,這個 seed 不算
       if (frames.some(isCrowded)) continue
       tested += 1
