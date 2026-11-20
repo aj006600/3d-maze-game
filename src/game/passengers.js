@@ -1,4 +1,5 @@
-// 奧客:開局時站在哪裡、怎麼遊蕩、什麼時候發現主角、怎麼追趕,以及他們與牆、主角、彼此之間的碰撞。
+// 奧客:開局時站在哪裡、怎麼遊蕩、什麼時候發現主角、怎麼追趕,他們與牆、主角、彼此之間的碰撞,
+// 以及被揮擊打中之後的硬直、擊倒與重生。
 // 奧客只由每一次推進帶動,經過的時間就是推進的秒數,不讀時鐘;用到的隨機全部來自這一局的亂數產生器。
 //
 // 遊蕩的奧客沿著格子中央的連線一格一格走:每走到一格的中央,就從來路以外的開口隨機挑一個走出去,
@@ -15,7 +16,10 @@
 // - 被主角擋住時,站在原地等主角讓開。
 // - 遊蕩時被另一位奧客擋住,就掉頭往回走,兩位才不會在走道上面對面僵住。
 // - 追趕時被另一位奧客擋住,就站在原地等。
-import { PASSENGERS } from '../config.js'
+//
+// 被打中的奧客停在原地硬直一會兒,之後追趕主角。累計被打中的次數夠多就倒地:倒地的奧客不擋路,
+// 躺一會兒就消失,等到重生的時間到了,再找一格主角看不到的地方重新出現,回到遊蕩。
+import { PASSENGERS, SWING_HIT } from '../config.js'
 import { cellOf, isInside, isSameCell, OFFSETS, stepOf } from './maze.js'
 import { moveCircle, PLAYER_RADIUS, WALL_THICKNESS } from './movement.js'
 
@@ -33,26 +37,19 @@ const LANE_SLACK = (1 - WALL_THICKNESS) / 2 - PASSENGERS.radius
  * 奧客用掉的亂數才不會改變這一局的配置。runSpeed 是主角跑步的速度,奧客的速度以它的倍數設定。
  *
  * 回傳的物件:
- * - `snapshot()`:每一位奧客的 `{ x, y, heading, state, hits }`,每次呼叫都是新的副本。
- * - `bodies()`:每一位奧客擋路用的圓 `{ x, y, radius }`,每次呼叫都是新的副本。
+ * - `snapshot()`:每一位奧客的 `{ x, y, heading, state, hits }`,每次呼叫都是新的副本。各狀態的意思見遊戲核心的 `passengers`。
+ * - `bodies()`:每一位擋路的奧客的圓 `{ x, y, radius }`,每次呼叫都是新的副本。倒地與等待重生的奧客不在裡面。
+ * - `strike(player)`:主角揮擊打中的那一刻呼叫,player 是主角當下的 `{ x, y, heading }`。
+ *   範圍內每一位還站著的奧客都被打中一次。
  * - `step(dt, player, walls)`:讓每一位奧客走 dt 秒。player 是主角當下的位置,walls 是當下擋路的每一段牆。
  *   奧客依序一位一位走,後走的那一位看到的是先走的那一位走完之後的位置。
  *   主角不在迷宮裡時(例如被傳送到迷宮外),追趕的奧客找不到路,就站在原地。
+ *   硬直、倒地與等待重生的計時也只在這裡累加。
  */
 export function createPassengers({ maze, start, random, runSpeed }) {
   const wanderSpeed = PASSENGERS.wanderSpeed * runSpeed
   const chaseSpeed = PASSENGERS.chaseSpeed * runSpeed
-  const passengers = spawnCellsOf(maze, start, random).map((cell) => ({
-    ...centerOf(cell),
-    heading: 0,
-    state: 'wandering',
-    hits: 0,
-    // 遊蕩時正走向哪一格的中央,以及剛離開哪一格的中央。兩者相同時,奧客還沒決定下一步往哪裡走
-    target: cell,
-    origin: cell,
-    // 遊蕩時還要在原地站幾秒
-    pause: 0,
-  }))
+  const passengers = spawnCellsOf(maze, start, random).map(standingAt)
   for (const passenger of passengers) arrive(passenger)
 
   // 奧客剛好站在 target 的中央時呼叫。它做三件事:
@@ -171,6 +168,31 @@ export function createPassengers({ maze, start, random, runSpeed }) {
     }
   }
 
+  // 讓等待重生的奧客在一格的中央重新出現,回到遊蕩,被打中的次數歸零。那一格要同時符合三件事:
+  // - 沿著迷宮的路徑離主角所在的格子夠遠。主角不在迷宮裡時,每一格都算夠遠。
+  // - 主角與那一格中央的連線被牆擋住,主角當下看不到他。
+  // - 他站在那裡不會與另一位奧客的身體疊在一起。另一位奧客在那一格裡的話,兩人一定會疊在一起。
+  // 倒地的另一位雖然不擋路,也算在裡面,重生的奧客才不會出現在躺著的人身上。
+  // 找不到這樣的格子時繼續等待,下一次推進再找
+  function respawn(passenger, player, walls, distances) {
+    const others = passengers.filter((other) => other !== passenger && other.state !== 'gone')
+    const candidates = []
+    for (let row = 0; row < maze.size; row += 1) {
+      for (let col = 0; col < maze.size; col += 1) {
+        const cell = { col, row }
+        const center = centerOf(cell)
+        if (distances !== null && distances[cellIndexOf(cell)] < PASSENGERS.minRespawnDistance) continue
+        if (!walls.some((wall) => crossesRect(player, center, wall))) continue
+        if (others.some((other) => Math.hypot(other.x - center.x, other.y - center.y) < 2 * PASSENGERS.radius)) continue
+        candidates.push(cell)
+      }
+    }
+    if (candidates.length === 0) return
+    const cell = random.pick(candidates)
+    Object.assign(passenger, standingAt(cell))
+    arrive(passenger)
+  }
+
   function cellIndexOf({ col, row }) {
     return row * maze.size + col
   }
@@ -195,16 +217,37 @@ export function createPassengers({ maze, start, random, runSpeed }) {
       return passengers.map(({ x, y, heading, state, hits }) => ({ x, y, heading, state, hits }))
     },
     bodies() {
-      return passengers.map((passenger) => bodyOf(passenger, PASSENGERS.radius))
+      return passengers.filter(isStanding).map((passenger) => bodyOf(passenger, PASSENGERS.radius))
+    },
+    strike(player) {
+      for (const passenger of passengers) {
+        if (!isStanding(passenger) || !inReach(player, passenger)) continue
+        passenger.hits += 1
+        passenger.state = passenger.hits >= PASSENGERS.knockDownHits ? 'down' : 'staggered'
+        passenger.timer = 0
+      }
     },
     step(dt, player, walls) {
       const playerBody = bodyOf(player, PLAYER_RADIUS)
       // 主角在這一次推進裡不會動,所以通往主角的路只要查一次
       const distances = distancesToPlayer(player)
       for (const passenger of passengers) {
+        if (!isStanding(passenger)) {
+          // 重生的秒數從倒地的那一刻算起,所以消失之後也接著累加
+          passenger.timer += dt
+          if (passenger.timer >= PASSENGERS.downSeconds) passenger.state = 'gone'
+          if (passenger.timer >= PASSENGERS.respawnSeconds) respawn(passenger, player, walls, distances)
+          continue
+        }
+        if (passenger.state === 'staggered') {
+          passenger.timer += dt
+          // 被打中就等於發現了主角,所以硬直結束後一律追趕,打中時還在遊蕩的也一樣
+          if (passenger.timer >= PASSENGERS.staggerSeconds) passenger.state = 'chasing'
+          continue
+        }
         if (passenger.state === 'wandering' && sees(passenger, player, walls)) passenger.state = 'chasing'
         const others = passengers
-          .filter((other) => other !== passenger)
+          .filter((other) => other !== passenger && isStanding(other))
           .map((other) => bodyOf(other, PASSENGERS.radius))
         const obstacles = [playerBody, ...others]
         if (passenger.state === 'chasing') chase(passenger, dt, { obstacles, player, walls, distances })
@@ -241,6 +284,40 @@ function pathDistancesFrom(maze, from) {
 function sees(passenger, player, walls) {
   if (Math.hypot(player.x - passenger.x, player.y - passenger.y) > PASSENGERS.discoverDistance) return false
   return !walls.some((wall) => crossesRect(passenger, player, wall))
+}
+
+// 剛出現在 cell 中央的奧客:在遊蕩,還沒被打中過,也還沒決定下一步往哪裡走。開局與重生都從這個樣子開始
+function standingAt(cell) {
+  return {
+    ...centerOf(cell),
+    heading: 0,
+    state: 'wandering',
+    hits: 0,
+    // 遊蕩時正走向哪一格的中央,以及剛離開哪一格的中央。兩者相同時,奧客還沒決定下一步往哪裡走
+    target: cell,
+    origin: cell,
+    // 遊蕩時還要在原地站幾秒
+    pause: 0,
+    // 硬直時是這次硬直已經過了幾秒;倒地與等待重生時是倒地之後已經過了幾秒
+    timer: 0,
+  }
+}
+
+// 奧客是不是站在迷宮裡。倒地與等待重生的奧客不擋路,也不會被打中
+function isStanding({ state }) {
+  return state !== 'down' && state !== 'gone'
+}
+
+// 主角揮擊時打不打得到奧客:兩者中心的距離夠近,而且奧客偏離主角正前方的角度夠小。
+// 兩者的中心重疊時,奧客不論在哪個方向都算打得到
+function inReach(player, passenger) {
+  const dx = passenger.x - player.x
+  const dy = passenger.y - player.y
+  const distance = Math.hypot(dx, dy)
+  if (distance > SWING_HIT.reach) return false
+  // 沿著主角的朝向量,奧客在主角前方多遠。朝向的慣例是 0 朝北、順時針增加,所以正前方是 (sin, -cos)
+  const ahead = dx * Math.sin(player.heading) - dy * Math.cos(player.heading)
+  return ahead >= distance * Math.cos(SWING_HIT.halfAngle)
 }
 
 // 從 from 到 to 的線段有沒有碰到長方形,剛好擦過邊也算

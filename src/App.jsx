@@ -1,6 +1,6 @@
 // 首頁就是遊戲:畫布在底下,介面層的畫面疊在上面。這裡決定目前停在哪個畫面、選了哪個時限、有沒有靜音,
-// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開、倒數最後幾秒的每一秒、揮擊時登機箱揮下去、奧客發現主角)告訴音訊,
-// 由它播對應的音樂與音效。
+// 並把畫面、靜音與遊戲中的事件(收集、按錯、門打開、倒數最後幾秒的每一秒、揮擊時登機箱揮下去、打中與擊倒奧客、
+// 奧客發現主角)告訴音訊,由它播對應的音樂與音效。
 //
 // 暫停只有一條規則:畫面停在遊戲中,而且游標鎖在畫布上,遊戲才推進。游標一放開就是暫停,
 // 不論是按 Esc、切到別的視窗還是切到別的分頁,瀏覽器都會放開游標,所以三者走同一條路。
@@ -25,6 +25,9 @@ const newGame = (timeLimit) => createGame(SEED, { allowTeleport, timeLimit })
 
 // 用 KeyboardEvent.code 認按鍵的實體位置,與移動鍵的認法一致
 const MUTE_KEY = 'KeyM'
+
+// 揮擊的每一種結果播哪一個音效
+const STRIKE_SOUNDS = { missed: 'swing', hit: 'passengerHit', knockedDown: 'knockDown' }
 
 export default function App() {
   // 選的時限只存在記憶體裡:回到開始畫面時仍是上次選的,重新整理網頁後回到預設
@@ -65,7 +68,8 @@ export default function App() {
     [audio],
   )
 
-  const handleSwingStrike = useCallback(() => audio.playSound('swing'), [audio])
+  // 一次揮擊只播一個聲音:打中奧客的那一下改播悶響或擊倒的聲音,不疊上揮擊的撞擊聲
+  const handleSwingStrike = useCallback((result) => audio.playSound(STRIKE_SOUNDS[result]), [audio])
   const handleDiscovered = useCallback(() => audio.playSound('discovered'), [audio])
 
   useEffect(() => {

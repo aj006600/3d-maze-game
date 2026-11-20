@@ -13,6 +13,9 @@
 這時會響一聲提示。發現主角的奧客跑得比主角快一點,沿著走道追過來,主角跑出視線或跑遠都甩不掉他。
 奧客不會傷害主角,只會貼在主角身邊擋路:他們身材高大、幾乎塞滿走道,主角推不動、貼著走道的一側或在轉角也繞不過他們,
 走進死路時,跟進來的奧客會把死路的開口擋住。奧客擋在鏡頭前面時會變成半透明。
+要擺脫奧客只能擊倒他:面向奧客揮擊登機箱,他被打中時會閃一下白、停下來一小段時間,打中 3 次就倒在地上,
+從倒地的那一刻起不再擋路,停一下就消失。打中的次數不會隨時間歸零。被擊倒的奧客 5 秒後在迷宮裡另一個主角看不到的地方重生,
+回到遊蕩。兩位奧客都在面前時,一次揮擊可以同時打中兩位。
 
 **操作**:打開網頁先點一下禮物盒,音樂從這一下開始播;在開始畫面選時限(5 分鐘、10 分鐘、20 分鐘或不限時,預設不限時),
 再按「開始」鎖定游標,進入迷宮。有時限的一局在通關字串下方倒數,剩 30 秒起數字變紅閃動、每過一秒響一聲提示聲,
@@ -24,7 +27,7 @@
 | `W` `A` `S` `D` | W 前進、S 倒退、A 與 D 橫移 |
 | 滑鼠 | 左右移動轉向,上下移動調整俯仰角 |
 | `F` | 站進有字母的死路時收集字母 |
-| 滑鼠左鍵 / 空白鍵 | 揮擊登機箱:雙手把它由右上往左下揮一次,揮的時候照樣可以跑 |
+| 滑鼠左鍵 / 空白鍵 | 揮擊登機箱:雙手把它由右上往左下揮一次,揮的時候照樣可以跑;打中奧客 3 次就擊倒他 |
 | `Esc` | 暫停;在暫停畫面按「繼續」接著玩,或回到開始畫面 |
 | `M` | 切換靜音,畫面右上角的喇叭圖示顯示目前的狀態 |
 
@@ -54,7 +57,7 @@ make help    # 其餘指令
 ├── src/
 │   ├── App.jsx             # 首頁就是遊戲:把介面層疊在畫布上,並決定目前停在哪個畫面
 │   ├── audio/              # 音訊:依畫面播放音樂、轉場淡出、遊戲中的音效與靜音(Web Audio API),音樂放在 music/、音效放在 sounds/
-│   ├── config.js           # 試玩後要調整的設定:seed、通關字串、祝福文字、時限的選項、奧客(人數、碰撞半徑、遊蕩的速度與停頓、發現的距離、追趕的速度)、場景比例(牆高、走道寬度)、收集回饋的長度、揮擊的長度、鏡頭距離與俯仰角
+│   ├── config.js           # 試玩後要調整的設定:seed、通關字串、祝福文字、時限的選項、奧客(人數、碰撞半徑、遊蕩的速度與停頓、發現的距離、追趕的速度、硬直的秒數、擊倒的次數、倒地與重生的秒數、重生的最小距離)、場景比例(牆高、走道寬度)、收集回饋的長度、揮擊的長度與打中的時間點和範圍、鏡頭距離與俯仰角
 │   ├── game/               # 遊戲核心:不依賴 Three.js、React 與瀏覽器 API 的純模組
 │   ├── render/             # 渲染層:用 Three.js 把遊戲核心的狀態(包括奧客)畫成 3D 場景,另外負責鏡頭、鍵鼠輸入與跟著主角跑的狗,不持有規則
 │   └── ui/                 # 介面層:疊在畫布上的入口畫面、開始畫面、遊戲中的提示、暫停畫面、失敗畫面、破關畫面與喇叭圖示(React),不持有規則
@@ -96,7 +99,7 @@ CC BY 3.0 的標註:
 
 ### Sound Effects
 
-六個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
+八個音效都是 Kenney(www.kenney.nl)音效包裡的原檔,檔名與內容都沒有改動。
 
 | 時機 | 檔案 | 音效包 | 來源 | 授權 |
 |------|------|--------|------|------|
@@ -104,5 +107,7 @@ CC BY 3.0 的標註:
 | 按錯字母 | `question_004.ogg` | Interface Sounds | https://kenney.nl/assets/interface-sounds | CC0 |
 | 門打開 | `jingles_PIZZI10.ogg` | Music Jingles(Pizzicato jingles) | https://kenney.nl/assets/music-jingles | CC0 |
 | 倒數的最後 30 秒,每過一秒 | `glass_001.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
-| 揮擊時登機箱揮下去 | `impactPlate_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
+| 揮空時登機箱揮下去 | `impactPlate_heavy_001.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
+| 打中奧客(第 1、2 下) | `impactPunch_medium_000.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
+| 擊倒奧客(第 3 下) | `impactPunch_heavy_000.ogg` | Impact Sounds | https://kenney.nl/assets/impact-sounds | CC0 |
 | 奧客發現主角 | `error_006.ogg` | Interface Sounds | https://opengameart.org/content/interface-sounds | CC0 |
