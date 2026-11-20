@@ -9,7 +9,7 @@ make local       # Vite dev server(前景執行,Ctrl+C 停止)
 make local-down  # 停止並清理:container、network、anonymous volume,以及不會再用到的舊 image
 ```
 
-打開 http://localhost:3000,點一下禮物盒進到開始畫面,玩法與按鍵都寫在開始畫面上。
+打開 <http://localhost:3000>,點一下禮物盒進到開始畫面,玩法與按鍵都寫在開始畫面上。
 
 埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。
 
