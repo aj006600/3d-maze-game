@@ -1,6 +1,6 @@
 # Deployment
 
-遊戲是一包靜態檔,發佈在 GitHub Pages:<https://aj006600.github.io/3d-maze-game/>。
+遊戲是一包靜態檔,發佈在 GitHub Pages:<https://aj006600.github.io/hbd-3d-maze-game/>。
 只有打 `vX.Y.Z` tag 會發佈,PR 與 `main` 只跑測試、lint 與 build 檢查。為什麼這樣選,見
 [docs/adr/0002-static-site-on-github-pages.md](adr/0002-static-site-on-github-pages.md)。
 
@@ -72,12 +72,12 @@ repo 擁有者在第一次發版前要做一次,都在 repo 的 Settings 裡:
 改了資源的引用方式(新增圖片、音檔)或 `vite.config.js` 時,發版前在本機確認 build 出來的靜態檔放在子路徑底下打得開:
 
 ```bash
-docker build --target build -t 3d-maze-game:local-site .
-docker run --rm --init -p 127.0.0.1:4173:4173 3d-maze-game:local-site \
-    node_modules/.bin/vite preview --host --port 4173 --base /3d-maze-game/
+docker build --target build -t hbd-3d-maze-game:local-site .
+docker run --rm --init -p 127.0.0.1:4173:4173 hbd-3d-maze-game:local-site \
+    node_modules/.bin/vite preview --host --port 4173 --base /hbd-3d-maze-game/
 ```
 
-打開 <http://localhost:4173/3d-maze-game/>,玩一輪並確認 console 沒有錯誤,Ctrl+C 停止。
+打開 <http://localhost:4173/hbd-3d-maze-game/>,玩一輪並確認 console 沒有錯誤,Ctrl+C 停止。
 直接執行 vite 而不經過 `npx`:`npx` 不會把 Ctrl+C 轉給 vite,container 會停不下來。
-`--base` 讓 preview 和 Pages 一樣只在 `/3d-maze-game/` 底下供檔,子路徑以外的請求都是 404,
+`--base` 讓 preview 和 Pages 一樣只在 `/hbd-3d-maze-game/` 底下供檔,子路徑以外的請求都是 404,
 所以有資源寫成了絕對路徑就會載不到。這顆 image 帶著專案 label,`make clean` 會一起清掉。

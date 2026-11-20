@@ -7,7 +7,7 @@ services:
       context: .
       target: dev            # dev stage 的 CMD 就是 Vite dev server
     # TAG 由 make 傳入,每個 checkout 各用自己的 image 名:多個 worktree 同時 build 才不會搶同一個名字
-    image: ${APP_NAME:-3d-maze-game}:${TAG:-latest}
+    image: ${APP_NAME:-hbd-3d-maze-game}:${TAG:-latest}
     volumes:
       # 整個 checkout 掛進去:原始碼、index.html 與 vite.config.js 改了都不必重新 build
       - .:/app
