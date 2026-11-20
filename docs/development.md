@@ -9,10 +9,7 @@ make local       # Vite dev server(前景執行,Ctrl+C 停止)
 make local-down  # 停止並清理:container、network、anonymous volume,以及不會再用到的舊 image
 ```
 
-打開 http://localhost:3000,首頁先顯示入口畫面的禮物盒,點一下進到開始畫面,音樂也從這一下開始播;
-選好時限後按「開始」鎖定游標進入迷宮:WASD 跑、滑鼠左右移動轉向、上下移動調整俯仰角,站進有字母的角落按 F 收集,按滑鼠左鍵或空白鍵揮擊登機箱,打中擋路的奧客 3 次就擊倒他,
-集滿 13 個字母門就打開,走出門看到破關畫面;有時限的一局倒數歸零時還沒走出門,就看到失敗畫面。
-Esc 暫停,在暫停畫面按「繼續」接著玩或回到開始畫面,M 切換靜音。
+打開 http://localhost:3000,點一下禮物盒進到開始畫面,玩法與按鍵都寫在開始畫面上。
 
 埠只發佈到 loopback(`127.0.0.1`),同一個網路上的別台機器連不到。在遠端主機上開發時,用 SSH 或 VS Code 把埠轉接到自己的電腦。
 
@@ -20,6 +17,26 @@ Esc 暫停,在暫停畫面按「繼續」接著玩或回到開始畫面,M 切換
 
 ```bash
 PORT=3001 make local
+```
+
+## Structure
+
+```
+.
+├── src/
+│   ├── App.jsx                # 首頁就是遊戲:把介面層疊在畫布上,並決定目前停在哪個畫面
+│   ├── config.js              # 試玩後要調整的數值,改設定不必動程式
+│   ├── game/                  # 遊戲核心:規則與狀態,不依賴 Three.js、React 與瀏覽器 API
+│   ├── render/                # 渲染層:用 Three.js 把遊戲核心的狀態畫成 3D 場景,不持有規則
+│   ├── ui/                    # 介面層:疊在畫布上的畫面與提示(React),不持有規則
+│   └── audio/                 # 音樂與音效(Web Audio API)
+├── tests/                     # Vitest,鏡射 src/ 的結構
+├── Dockerfile · compose.yaml  # 本機開發、測試與 CI 共用的容器環境
+├── Makefile                   # 本機指令的入口,make help 列出全部
+├── .github/workflows/         # 每次都跑測試與 build 檢查,打 vX.Y.Z tag 才發佈到 GitHub Pages
+├── GLOSSARY.md                # 遊戲的用詞
+├── CLAUDE.md · .claude/       # coding agent 的規則與 guard hooks
+└── docs/                      # 開發與發佈的說明、ADR、agent 的設定,以及 README 用的 GIF
 ```
 
 ## Hot Reload
