@@ -95,6 +95,8 @@ const styles = {
     margin: '16px 0 28px',
     fontSize: 18,
     lineHeight: 1.7,
+    // 祝福文字裡的換行照樣換行;太長的一行仍然自動折行
+    whiteSpace: 'pre-line',
   },
   actions,
   restartButton: primaryButton,
