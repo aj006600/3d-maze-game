@@ -16,6 +16,8 @@ const OFFSETS = {
 }
 
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1)
+// 這一局的 seed。它們刻意不與 SEEDS 重疊:兩個 seed 相同時,這一局的產生器會重抽迷宮的產生器抽過的那串數
+const ROUND_SEEDS = Array.from({ length: 20 }, (_, i) => 1000 + i)
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 function cellsOf(maze) {
@@ -76,6 +78,40 @@ describe('createGame 的決定性', () => {
       const first = layoutOf(createGame(seed))
       vi.setSystemTime(new Date('2030-06-15T12:34:56Z'))
       expect(layoutOf(createGame(seed)), `seed ${seed}`).toEqual(first)
+    }
+  })
+
+  it('同樣的迷宮的 seed 與這一局的 seed 不論何時建立,都得到完全相同的一局,推進之後奧客的快照也一樣', () => {
+    vi.useFakeTimers()
+    // 主角照一段固定的輸入跑一會兒,奧客的遊蕩、發現與追趕都在這段時間裡
+    const playedOf = (seed, roundSeed) => {
+      const game = createGame(seed, { roundSeed })
+      run(game, { forward: 1, heading: 0.3 }, 2)
+      run(game, {}, 8)
+      return { ...layoutOf(game), passengers: game.passengers }
+    }
+    for (const seed of SEEDS.slice(0, 10)) {
+      for (const roundSeed of ROUND_SEEDS.slice(0, 3)) {
+        vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+        const first = playedOf(seed, roundSeed)
+        vi.setSystemTime(new Date('2030-06-15T12:34:56Z'))
+        expect(playedOf(seed, roundSeed), `seed ${seed} roundSeed ${roundSeed}`).toEqual(first)
+      }
+    }
+  })
+
+  it('同一個迷宮的 seed 配上不同的這一局的 seed,迷宮、起點與門完全一樣,字母的擺法彼此都不同', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const expected = layoutOf(createGame(seed))
+      const layouts = ROUND_SEEDS.map((roundSeed) => layoutOf(createGame(seed, { roundSeed })))
+      for (const [i, layout] of layouts.entries()) {
+        const label = `seed ${seed} roundSeed ${ROUND_SEEDS[i]}`
+        expect(layout.maze, label).toEqual(expected.maze)
+        expect(layout.start, label).toEqual(expected.start)
+        expect(layout.door, label).toEqual(expected.door)
+      }
+      const placements = new Set(layouts.map(({ letters }) => JSON.stringify(letters)))
+      expect(placements.size, `seed ${seed}`).toBe(ROUND_SEEDS.length)
     }
   })
 
@@ -147,48 +183,58 @@ describe('createGame 的門', () => {
 })
 
 describe('createGame 的字母', () => {
+  // 每一條規則都檢查兩種一局:只給迷宮的 seed,以及迷宮的 seed 配上每一個這一局的 seed。回傳每一局與它的標籤
+  const gamesOf = () =>
+    SEEDS.flatMap((seed) => [
+      { game: createGame(seed), label: `seed ${seed}` },
+      ...ROUND_SEEDS.map((roundSeed) => ({
+        game: createGame(seed, { roundSeed }),
+        label: `seed ${seed} roundSeed ${roundSeed}`,
+      })),
+    ])
+
   it('A 到 Z 各一個,依字母順序列出', () => {
-    for (const seed of SEEDS) {
-      const letters = createGame(seed).letters.map(({ letter }) => letter)
-      expect(letters.join(''), `seed ${seed}`).toBe(ALPHABET)
+    for (const { game, label } of gamesOf()) {
+      const letters = game.letters.map(({ letter }) => letter)
+      expect(letters.join(''), label).toBe(ALPHABET)
     }
   })
 
   it('每個字母都在角落裡', () => {
-    for (const seed of SEEDS) {
-      const { maze, letters } = createGame(seed)
+    for (const { game, label } of gamesOf()) {
+      const { maze, letters } = game
       for (const { letter, col, row } of letters) {
-        expect(maze.openings({ col, row }), `seed ${seed} ${letter}`).toHaveLength(1)
+        expect(maze.openings({ col, row }), `${label} ${letter}`).toHaveLength(1)
       }
     }
   })
 
   it('起點那一格沒有字母', () => {
-    for (const seed of SEEDS) {
-      const { start, letters } = createGame(seed)
-      expect(letters.map(keyOf), `seed ${seed}`).not.toContain(keyOf(start))
+    for (const { game, label } of gamesOf()) {
+      const { start, letters } = game
+      expect(letters.map(keyOf), label).not.toContain(keyOf(start))
     }
   })
 
   it('門所在的那一格沒有字母', () => {
-    for (const seed of SEEDS) {
-      const { door, letters } = createGame(seed)
-      expect(letters.map(keyOf), `seed ${seed}`).not.toContain(keyOf(door))
+    for (const { game, label } of gamesOf()) {
+      const { door, letters } = game
+      expect(letters.map(keyOf), label).not.toContain(keyOf(door))
     }
   })
 
   it('沒有兩個字母在同一格', () => {
-    for (const seed of SEEDS) {
-      const cells = new Set(createGame(seed).letters.map(keyOf))
-      expect(cells.size, `seed ${seed}`).toBe(26)
+    for (const { game, label } of gamesOf()) {
+      const cells = new Set(game.letters.map(keyOf))
+      expect(cells.size, label).toBe(26)
     }
   })
 
   it('字母在迷宮裡的位置不照字母順序排列', () => {
-    for (const seed of SEEDS) {
-      const { letters } = createGame(seed)
+    for (const { game, label } of gamesOf()) {
+      const { letters } = game
       const byPosition = [...letters].sort((a, b) => a.row - b.row || a.col - b.col).map(({ letter }) => letter)
-      expect(byPosition.join(''), `seed ${seed}`).not.toBe(ALPHABET)
+      expect(byPosition.join(''), label).not.toBe(ALPHABET)
     }
   })
 })

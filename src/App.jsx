@@ -21,7 +21,9 @@ import StartScreen from './ui/StartScreen.jsx'
 // 測試用的傳送 hook 只在網址帶 ?teleport 時開啟。正常遊玩的網址不帶它,所以玩家碰不到這個 hook
 const allowTeleport = new URLSearchParams(window.location.search).has('teleport')
 
-const newGame = (timeLimit) => createGame(SEED, { allowTeleport, timeLimit })
+// 每一局用系統亂數換一個這一局的 seed,字母與奧客才每一局都不同。介面層可以用系統亂數,遊戲核心不行
+const newGame = (timeLimit) =>
+  createGame(SEED, { allowTeleport, timeLimit, roundSeed: Math.floor(Math.random() * 2 ** 32) })
 
 // 用 KeyboardEvent.code 認按鍵的實體位置,與移動鍵的認法一致
 const MUTE_KEY = 'KeyM'
